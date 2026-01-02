@@ -30,7 +30,14 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
 # local env files
+.env
+.env.local
 .env*.local
 
 # typescript
@@ -39,3 +46,35 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build artifacts
+build/
+*.apk
+*.aab
+*.ipa
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Package lock (optionnel - décommente si tu préfères yarn)
+# package-lock.json
+
+# Archives
+*.zip
+*.tar.gz

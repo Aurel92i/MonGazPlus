@@ -1,32 +1,116 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, FontSizes, BorderRadius } from '@/constants/theme';
-
 /**
  * Écran de capture Photo AVANT
- * Partagé entre Technicien et Particulier
- * 
- * TODO Étape 2 : Implémenter
- * - Accès caméra avec expo-camera
- * - Barre de stabilisation (niveau)
- * - Cadre d'alignement intelligent
- * - Prise de photo avec métadonnées
+ * Avec caméra réelle, stabilisation et cadre d'alignement
  */
+
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { CameraView } from 'expo-camera';
+import { Colors, Spacing, FontSizes, BorderRadius } from '@/constants/theme';
+import { useCamera, useStabilization } from '@/hooks';
+import { StabilizationBar, AlignmentFrame } from '@/components/camera';
+import { useVEAStore } from '@/stores/veaStore';
 
 export default function PhotoAvantScreen() {
   const router = useRouter();
+  const veaStore = useVEAStore();
+  
+  // Hooks personnalisés
+  const camera = useCamera();
+  const stabilization = useStabilization({
+    threshold: 5, // Un peu plus permissif pour l'UX
+    minStableDuration: 300,
+  });
 
-  const handleCapture = () => {
-    router.replace('/capture/photo-apres');
+  const [showInstructions, setShowInstructions] = useState(true);
+
+  // Démarrer les capteurs au montage
+  useEffect(() => {
+    stabilization.startSensors();
+    
+    return () => {
+      stabilization.stopSensors();
+    };
+  }, []);
+
+  // Demander les permissions au montage
+  useEffect(() => {
+    if (camera.hasPermission === null) {
+      camera.askPermission();
+    }
+  }, [camera.hasPermission]);
+
+  // Masquer les instructions après 3 secondes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowInstructions(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleCapture = async () => {
+    if (!stabilization.isStable) {
+      Alert.alert(
+        'Téléphone instable',
+        'Stabilisez votre téléphone avant de capturer.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    const photo = await camera.takePhoto({
+      pitch: stabilization.pitch,
+      roll: stabilization.roll,
+      yaw: stabilization.yaw,
+    });
+
+    if (photo) {
+      // Sauvegarder dans le store
+      veaStore.setPhotoBefore(photo);
+      
+      // Naviguer vers photo après
+      router.replace('/capture/photo-apres');
+    } else {
+      Alert.alert('Erreur', 'Échec de la capture. Réessayez.');
+    }
   };
 
   const handleClose = () => {
+    veaStore.resetSession();
     router.back();
   };
 
+  // Écran de demande de permission
+  if (camera.hasPermission === false) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionIcon}>📷</Text>
+          <Text style={styles.permissionTitle}>Accès caméra requis</Text>
+          <Text style={styles.permissionText}>
+            MonGaz+ a besoin d'accéder à votre caméra pour photographier le compteur.
+          </Text>
+          <TouchableOpacity
+            style={styles.permissionButton}
+            onPress={camera.askPermission}
+          >
+            <Text style={styles.permissionButtonText}>Autoriser l'accès</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleClose}
+          >
+            <Text style={styles.cancelButtonText}>Annuler</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
@@ -39,61 +123,76 @@ export default function PhotoAvantScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      {/* Zone caméra (placeholder) */}
+      {/* Zone caméra */}
       <View style={styles.cameraContainer}>
-        <View style={styles.cameraPlaceholder}>
-          <Text style={styles.cameraPlaceholderIcon}>📷</Text>
-          <Text style={styles.cameraPlaceholderText}>
-            Zone de prévisualisation caméra
-          </Text>
-          <Text style={styles.cameraPlaceholderSubtext}>
-            (Sera implémenté à l'étape 2)
-          </Text>
-        </View>
+        {camera.hasPermission && (
+          <CameraView
+            ref={camera.cameraRef}
+            style={styles.camera}
+            facing={camera.cameraType}
+            onCameraReady={camera.onCameraReady}
+          />
+        )}
 
         {/* Cadre d'alignement */}
-        <View style={styles.alignmentFrame}>
-          <View style={styles.frameCorner} />
-          <View style={[styles.frameCorner, styles.frameCornerTopRight]} />
-          <View style={[styles.frameCorner, styles.frameCornerBottomLeft]} />
-          <View style={[styles.frameCorner, styles.frameCornerBottomRight]} />
-          
-          {/* Indicateur de zone décimale */}
-          <View style={styles.decimalZoneIndicator}>
-            <Text style={styles.decimalZoneText}>Zone décimale</Text>
-          </View>
+        <View style={styles.frameOverlay}>
+          <AlignmentFrame
+            isStable={stabilization.isStable}
+            isAligned={false}
+            label="Cadrez les chiffres rouges"
+          />
         </View>
+
+        {/* Instructions initiales */}
+        {showInstructions && (
+          <View style={styles.instructionsOverlay}>
+            <View style={styles.instructionsCard}>
+              <Text style={styles.instructionsIcon}>📸</Text>
+              <Text style={styles.instructionsTitle}>Cadrez le compteur</Text>
+              <Text style={styles.instructionsText}>
+                Placez les 3 chiffres rouges (décimales) dans le cadre.
+                Stabilisez le téléphone.
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Barre de stabilisation */}
-      <View style={styles.stabilizationBar}>
-        <View style={styles.levelIndicator}>
-          <View style={styles.levelBubble} />
-        </View>
-        <Text style={styles.stabilizationText}>
-          Maintenez le téléphone stable et droit
-        </Text>
-      </View>
-
-      {/* Instructions */}
-      <View style={styles.instructionsContainer}>
-        <Text style={styles.instructionsTitle}>📸 Cadrez le compteur</Text>
-        <Text style={styles.instructionsText}>
-          Placez les chiffres rouges (décimales) dans le cadre.
-          Le cadre deviendra vert quand c'est bon.
-        </Text>
+      <View style={styles.stabilizationContainer}>
+        <StabilizationBar
+          score={stabilization.stabilityScore}
+          isStable={stabilization.isStable}
+          pitch={stabilization.pitch}
+          roll={stabilization.roll}
+          message={stabilization.message}
+        />
       </View>
 
       {/* Bouton de capture */}
       <View style={styles.captureContainer}>
         <TouchableOpacity
-          style={styles.captureButton}
+          style={[
+            styles.captureButton,
+            stabilization.isStable && styles.captureButtonReady,
+            camera.isCapturing && styles.captureButtonDisabled,
+          ]}
           onPress={handleCapture}
+          disabled={camera.isCapturing}
           activeOpacity={0.8}
         >
-          <View style={styles.captureButtonInner} />
+          <View style={[
+            styles.captureButtonInner,
+            stabilization.isStable && styles.captureButtonInnerReady,
+          ]} />
         </TouchableOpacity>
-        <Text style={styles.captureHint}>Appuyez pour capturer</Text>
+        <Text style={styles.captureHint}>
+          {camera.isCapturing 
+            ? 'Capture en cours...' 
+            : stabilization.isStable 
+              ? 'Appuyez pour capturer' 
+              : 'Stabilisez le téléphone'}
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -145,108 +244,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  cameraPlaceholder: {
+  camera: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  cameraPlaceholderIcon: {
-    fontSize: 64,
-    marginBottom: Spacing.md,
-  },
-  cameraPlaceholderText: {
-    color: '#666',
-    fontSize: FontSizes.md,
-  },
-  cameraPlaceholderSubtext: {
-    color: '#444',
-    fontSize: FontSizes.sm,
-    marginTop: Spacing.xs,
-  },
-  alignmentFrame: {
-    position: 'absolute',
-    top: '25%',
-    left: '10%',
-    right: '10%',
-    height: '30%',
-    borderWidth: 2,
-    borderColor: Colors.frameNotAligned,
-    borderRadius: BorderRadius.md,
-  },
-  frameCorner: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderColor: Colors.frameNotAligned,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    top: -2,
-    left: -2,
-  },
-  frameCornerTopRight: {
-    left: undefined,
-    right: -2,
-    borderLeftWidth: 0,
-    borderRightWidth: 4,
-  },
-  frameCornerBottomLeft: {
-    top: undefined,
-    bottom: -2,
-    borderTopWidth: 0,
-    borderBottomWidth: 4,
-  },
-  frameCornerBottomRight: {
-    top: undefined,
-    left: undefined,
-    right: -2,
-    bottom: -2,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-  },
-  decimalZoneIndicator: {
-    position: 'absolute',
-    bottom: -30,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  decimalZoneText: {
-    color: Colors.frameNotAligned,
-    fontSize: FontSizes.xs,
-    fontWeight: '500',
-  },
-  stabilizationBar: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    padding: Spacing.md,
-    marginHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  levelIndicator: {
-    width: 120,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    marginBottom: Spacing.xs,
+  frameOverlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
   },
-  levelBubble: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.warning,
+  instructionsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: Spacing.xl,
   },
-  stabilizationText: {
-    color: '#AAA',
-    fontSize: FontSizes.sm,
+  instructionsCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginHorizontal: Spacing.lg,
+    alignItems: 'center',
+    maxWidth: 300,
   },
-  instructionsContainer: {
-    padding: Spacing.md,
+  instructionsIcon: {
+    fontSize: 32,
+    marginBottom: Spacing.sm,
   },
   instructionsTitle: {
     color: '#FFF',
@@ -257,7 +279,12 @@ const styles = StyleSheet.create({
   instructionsText: {
     color: '#AAA',
     fontSize: FontSizes.sm,
+    textAlign: 'center',
     lineHeight: 20,
+  },
+  stabilizationContainer: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   captureContainer: {
     alignItems: 'center',
@@ -273,15 +300,68 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: '#FFF',
   },
+  captureButtonReady: {
+    borderColor: Colors.veaOk,
+    backgroundColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  captureButtonDisabled: {
+    opacity: 0.5,
+  },
   captureButtonInner: {
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: '#FFF',
   },
+  captureButtonInnerReady: {
+    backgroundColor: Colors.veaOk,
+  },
   captureHint: {
     color: '#888',
     fontSize: FontSizes.sm,
     marginTop: Spacing.sm,
+  },
+  // Permission screen
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  permissionIcon: {
+    fontSize: 64,
+    marginBottom: Spacing.lg,
+  },
+  permissionTitle: {
+    color: '#FFF',
+    fontSize: FontSizes.xl,
+    fontWeight: '700',
+    marginBottom: Spacing.sm,
+  },
+  permissionText: {
+    color: '#AAA',
+    fontSize: FontSizes.md,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+    lineHeight: 22,
+  },
+  permissionButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+  },
+  permissionButtonText: {
+    color: '#FFF',
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    paddingVertical: Spacing.sm,
+  },
+  cancelButtonText: {
+    color: '#888',
+    fontSize: FontSizes.md,
   },
 });

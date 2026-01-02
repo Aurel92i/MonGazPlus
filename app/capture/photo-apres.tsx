@@ -1,18 +1,47 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+/**
+ * Écran de capture Photo APRÈS
+ * Avec timer, mode fantôme et stabilisation
+ */
+
+import { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect, useRef } from 'react';
+import { CameraView } from 'expo-camera';
 import { Colors, Spacing, FontSizes, BorderRadius } from '@/constants/theme';
+import { useCamera, useStabilization } from '@/hooks';
+import { StabilizationBar, AlignmentFrame, GhostOverlay } from '@/components/camera';
+import { useVEAStore } from '@/stores/veaStore';
+
+// Temps recommandé en secondes (3 minutes)
+const RECOMMENDED_TIME = 180;
 
 export default function PhotoApresScreen() {
   const router = useRouter();
+  const veaStore = useVEAStore();
+  const { captureState } = veaStore;
+  
+  // Timer
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Mode fantôme
+  const [showGhost, setShowGhost] = useState(true);
 
+  // Hooks personnalisés
+  const camera = useCamera();
+  const stabilization = useStabilization({
+    threshold: 5,
+    minStableDuration: 300,
+  });
+
+  // Démarrer le timer au montage
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setElapsedTime((prev) => prev + 1);
     }, 1000);
+
+    veaStore.startTimer();
 
     return () => {
       if (timerRef.current) {
@@ -21,30 +50,113 @@ export default function PhotoApresScreen() {
     };
   }, []);
 
+  // Mettre à jour le temps écoulé dans le store
+  useEffect(() => {
+    veaStore.updateElapsedTime(elapsedTime);
+  }, [elapsedTime]);
+
+  // Démarrer les capteurs au montage
+  useEffect(() => {
+    stabilization.startSensors();
+    
+    return () => {
+      stabilization.stopSensors();
+    };
+  }, []);
+
+  // Demander les permissions si nécessaire
+  useEffect(() => {
+    if (camera.hasPermission === null) {
+      camera.askPermission();
+    }
+  }, [camera.hasPermission]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleCapture = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
+  const isTimeRecommended = elapsedTime >= RECOMMENDED_TIME;
+  const progressPercent = Math.min((elapsedTime / RECOMMENDED_TIME) * 100, 100);
+
+  const handleCapture = async () => {
+    // Avertir si le temps est court
+    if (elapsedTime < 60) {
+      Alert.alert(
+        'Temps court',
+        'Moins d\'une minute s\'est écoulée. Pour un test fiable, attendez au moins 3 minutes.\n\nVoulez-vous continuer quand même ?',
+        [
+          { text: 'Attendre', style: 'cancel' },
+          { text: 'Continuer', onPress: () => capturePhoto() },
+        ]
+      );
+      return;
     }
-    router.replace('/analyse/resultat');
+
+    if (!stabilization.isStable) {
+      Alert.alert(
+        'Téléphone instable',
+        'Stabilisez votre téléphone avant de capturer.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    capturePhoto();
+  };
+
+  const capturePhoto = async () => {
+    const photo = await camera.takePhoto({
+      pitch: stabilization.pitch,
+      roll: stabilization.roll,
+      yaw: stabilization.yaw,
+    });
+
+    if (photo) {
+      // Arrêter le timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      veaStore.stopTimer();
+      
+      // Sauvegarder dans le store
+      veaStore.setPhotoAfter(photo);
+      
+      // Naviguer vers le résultat
+      router.replace('/analyse/resultat');
+    } else {
+      Alert.alert('Erreur', 'Échec de la capture. Réessayez.');
+    }
   };
 
   const handleClose = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
-    router.back();
+    
+    Alert.alert(
+      'Abandonner le test ?',
+      'Le test sera annulé et vous devrez recommencer.',
+      [
+        { text: 'Continuer le test', style: 'cancel' },
+        { 
+          text: 'Abandonner', 
+          style: 'destructive',
+          onPress: () => {
+            veaStore.resetSession();
+            router.back();
+          }
+        },
+      ]
+    );
   };
 
-  const isTimeRecommended = elapsedTime >= 180;
+  // Vérifier qu'on a bien la photo avant
+  const photoBeforeUri = captureState.photoBefore?.uri;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
@@ -69,18 +181,19 @@ export default function PhotoApresScreen() {
         ]}>
           {formatTime(elapsedTime)}
         </Text>
+        
         {!isTimeRecommended ? (
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
               <View 
                 style={[
                   styles.progressFill, 
-                  { width: `${Math.min((elapsedTime / 180) * 100, 100)}%` }
+                  { width: `${progressPercent}%` }
                 ]} 
               />
             </View>
             <Text style={styles.timerHint}>
-              Attendez encore {formatTime(180 - elapsedTime)}
+              Recommandé : {formatTime(RECOMMENDED_TIME - elapsedTime)} restantes
             </Text>
           </View>
         ) : (
@@ -88,40 +201,44 @@ export default function PhotoApresScreen() {
         )}
       </View>
 
-      {/* Zone caméra avec mode fantôme */}
+      {/* Zone caméra */}
       <View style={styles.cameraContainer}>
-        <View style={styles.cameraPlaceholder}>
-          <View style={styles.ghostOverlay}>
-            <Text style={styles.ghostText}>👻</Text>
-            <Text style={styles.ghostLabel}>Mode fantôme actif</Text>
-            <Text style={styles.ghostSubtext}>
-              Alignez sur la photo précédente
-            </Text>
-          </View>
-        </View>
+        {camera.hasPermission && (
+          <CameraView
+            ref={camera.cameraRef}
+            style={styles.camera}
+            facing={camera.cameraType}
+            onCameraReady={camera.onCameraReady}
+          />
+        )}
+
+        {/* Mode fantôme */}
+        {showGhost && photoBeforeUri && (
+          <GhostOverlay
+            imageUri={photoBeforeUri}
+            initialOpacity={0.3}
+          />
+        )}
 
         {/* Cadre d'alignement */}
-        <View style={[
-          styles.alignmentFrame,
-          isTimeRecommended && styles.alignmentFrameReady
-        ]}>
-          <View style={[styles.frameCorner, isTimeRecommended && styles.frameCornerReady]} />
-          <View style={[styles.frameCorner, styles.frameCornerTopRight, isTimeRecommended && styles.frameCornerReady]} />
-          <View style={[styles.frameCorner, styles.frameCornerBottomLeft, isTimeRecommended && styles.frameCornerReady]} />
-          <View style={[styles.frameCorner, styles.frameCornerBottomRight, isTimeRecommended && styles.frameCornerReady]} />
+        <View style={styles.frameOverlay}>
+          <AlignmentFrame
+            isStable={stabilization.isStable}
+            isAligned={isTimeRecommended}
+            label="Alignez comme la 1ère photo"
+          />
         </View>
       </View>
 
-      {/* Instructions */}
-      <View style={styles.instructionsContainer}>
-        <Text style={styles.instructionsTitle}>
-          {isTimeRecommended ? '✅ Prêt !' : '⏳ Patientez...'}
-        </Text>
-        <Text style={styles.instructionsText}>
-          {isTimeRecommended 
-            ? 'Alignez exactement comme la première photo et capturez.' 
-            : 'Le gaz doit rester coupé pendant ce temps pour un test fiable.'}
-        </Text>
+      {/* Barre de stabilisation */}
+      <View style={styles.stabilizationContainer}>
+        <StabilizationBar
+          score={stabilization.stabilityScore}
+          isStable={stabilization.isStable}
+          pitch={stabilization.pitch}
+          roll={stabilization.roll}
+          message={stabilization.message}
+        />
       </View>
 
       {/* Bouton de capture */}
@@ -129,20 +246,26 @@ export default function PhotoApresScreen() {
         <TouchableOpacity
           style={[
             styles.captureButton,
-            isTimeRecommended && styles.captureButtonReady
+            stabilization.isStable && isTimeRecommended && styles.captureButtonReady,
+            camera.isCapturing && styles.captureButtonDisabled,
           ]}
           onPress={handleCapture}
+          disabled={camera.isCapturing}
           activeOpacity={0.8}
         >
           <View style={[
             styles.captureButtonInner,
-            isTimeRecommended && styles.captureButtonInnerReady
+            stabilization.isStable && isTimeRecommended && styles.captureButtonInnerReady,
           ]} />
         </TouchableOpacity>
         <Text style={styles.captureHint}>
-          {isTimeRecommended 
-            ? 'Appuyez pour capturer' 
-            : 'Vous pouvez capturer avant si besoin'}
+          {camera.isCapturing 
+            ? 'Capture en cours...' 
+            : !stabilization.isStable
+              ? 'Stabilisez le téléphone'
+              : !isTimeRecommended
+                ? 'Vous pouvez capturer (temps court)'
+                : 'Appuyez pour capturer'}
         </Text>
       </View>
     </SafeAreaView>
@@ -191,7 +314,7 @@ const styles = StyleSheet.create({
   timerContainer: {
     backgroundColor: 'rgba(255,255,255,0.1)',
     marginHorizontal: Spacing.md,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     borderRadius: BorderRadius.xl,
     alignItems: 'center',
   },
@@ -207,7 +330,7 @@ const styles = StyleSheet.create({
   },
   timerValue: {
     color: '#FFF',
-    fontSize: 56,
+    fontSize: 48,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
@@ -249,95 +372,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  cameraPlaceholder: {
+  camera: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-    alignItems: 'center',
+  },
+  frameOverlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
-  },
-  ghostOverlay: {
     alignItems: 'center',
-    padding: Spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    zIndex: 20,
   },
-  ghostText: {
-    fontSize: 48,
-    marginBottom: Spacing.sm,
-  },
-  ghostLabel: {
-    color: '#888',
-    fontSize: FontSizes.md,
-    fontWeight: '500',
-  },
-  ghostSubtext: {
-    color: '#555',
-    fontSize: FontSizes.sm,
-    marginTop: Spacing.xs,
-  },
-  alignmentFrame: {
-    position: 'absolute',
-    top: '25%',
-    left: '10%',
-    right: '10%',
-    height: '30%',
-    borderWidth: 2,
-    borderColor: Colors.frameAlmostAligned,
-    borderRadius: BorderRadius.md,
-  },
-  alignmentFrameReady: {
-    borderColor: Colors.frameAligned,
-  },
-  frameCorner: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderColor: Colors.frameAlmostAligned,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    top: -2,
-    left: -2,
-  },
-  frameCornerReady: {
-    borderColor: Colors.frameAligned,
-  },
-  frameCornerTopRight: {
-    left: undefined,
-    right: -2,
-    borderLeftWidth: 0,
-    borderRightWidth: 4,
-  },
-  frameCornerBottomLeft: {
-    top: undefined,
-    bottom: -2,
-    borderTopWidth: 0,
-    borderBottomWidth: 4,
-  },
-  frameCornerBottomRight: {
-    top: undefined,
-    left: undefined,
-    right: -2,
-    bottom: -2,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-  },
-  instructionsContainer: {
-    padding: Spacing.md,
-  },
-  instructionsTitle: {
-    color: '#FFF',
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
-  },
-  instructionsText: {
-    color: '#AAA',
-    fontSize: FontSizes.sm,
-    lineHeight: 20,
+  stabilizationContainer: {
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   captureContainer: {
     alignItems: 'center',
@@ -357,6 +403,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.veaOk,
     backgroundColor: 'rgba(34, 197, 94, 0.3)',
   },
+  captureButtonDisabled: {
+    opacity: 0.5,
+  },
   captureButtonInner: {
     width: 56,
     height: 56,
@@ -370,5 +419,6 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: FontSizes.sm,
     marginTop: Spacing.sm,
+    textAlign: 'center',
   },
 });
