@@ -1,10 +1,10 @@
 /**
  * Écran de résultat VEA
  * Effectue l'analyse et affiche le verdict
- * Photos cliquables avec pinch-to-zoom
+ * Photos consultables avec pinch-to-zoom et déplacement (comme app Photos)
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -15,8 +15,6 @@ import {
   ActivityIndicator,
   Modal,
   Dimensions,
-  Animated,
-  PanResponder
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,8 +23,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { useVEAStore } from '@/stores/veaStore';
 import { VEADecision, VEAResult } from '@/types';
 import { performVEAAnalysis, performMockVEAAnalysis } from '@/lib';
+import { ImageViewer } from '@/components/ImageViewer';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 
 type PhotoViewMode = 'before' | 'after' | 'compare';
 
@@ -46,12 +45,6 @@ export default function ResultatScreen() {
   // Modal photo
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [photoViewMode, setPhotoViewMode] = useState<PhotoViewMode>('before');
-  
-  // Zoom manuel
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
 
   // Récupérer le temps écoulé depuis le store
   const elapsedTime = captureState.elapsedTime || 0;
@@ -60,57 +53,6 @@ export default function ResultatScreen() {
   useEffect(() => {
     analyzePhotos();
   }, []);
-
-  // Reset zoom quand on change de mode
-  useEffect(() => {
-    resetZoom();
-  }, [photoViewMode]);
-
-  const resetZoom = () => {
-    setZoomLevel(1);
-    scaleAnim.setValue(1);
-    translateX.setValue(0);
-    translateY.setValue(0);
-  };
-
-  const handleZoomIn = () => {
-    const newZoom = Math.min(zoomLevel + 0.5, 4);
-    setZoomLevel(newZoom);
-    Animated.spring(scaleAnim, {
-      toValue: newZoom,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handleZoomOut = () => {
-    const newZoom = Math.max(zoomLevel - 0.5, 1);
-    setZoomLevel(newZoom);
-    Animated.spring(scaleAnim, {
-      toValue: newZoom,
-      useNativeDriver: true,
-    }).start();
-    if (newZoom === 1) {
-      Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
-    }
-  };
-
-  // Pan responder pour déplacer l'image zoomée
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => zoomLevel > 1,
-      onMoveShouldSetPanResponder: () => zoomLevel > 1,
-      onPanResponderMove: (_, gestureState) => {
-        if (zoomLevel > 1) {
-          translateX.setValue(gestureState.dx);
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: () => {
-        // Garder la position
-      },
-    })
-  ).current;
 
   const analyzePhotos = async () => {
     setIsAnalyzing(true);
@@ -194,7 +136,6 @@ export default function ResultatScreen() {
 
   const openPhotoModal = (mode: PhotoViewMode) => {
     setPhotoViewMode(mode);
-    resetZoom();
     setPhotoModalVisible(true);
   };
 
@@ -322,10 +263,10 @@ export default function ResultatScreen() {
           </View>
         </View>
 
-        {/* Aperçu des photos - CLIQUABLES */}
+        {/* Aperçu des photos */}
         <View style={styles.photosCard}>
           <Text style={styles.photosTitle}>📸 Photos de l'analyse</Text>
-          <Text style={styles.photosTip}>Appuyez pour agrandir • Zoomez avec les boutons +/-</Text>
+          <Text style={styles.photosTip}>Appuyez pour consulter • Pincez pour zoomer • Double-tap = zoom x2.5</Text>
           
           <View style={styles.photosContainer}>
             {/* Photo AVANT */}
@@ -436,7 +377,7 @@ export default function ResultatScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Modal visualisation photos avec ZOOM */}
+      {/* Modal visualisation photos */}
       <Modal
         visible={photoModalVisible}
         transparent={true}
@@ -481,18 +422,8 @@ export default function ResultatScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Contrôles zoom */}
-            {photoViewMode !== 'compare' && (
-              <View style={styles.zoomControls}>
-                <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOut}>
-                  <Text style={styles.zoomBtnText}>−</Text>
-                </TouchableOpacity>
-                <Text style={styles.zoomText}>{zoomLevel.toFixed(1)}x</Text>
-                <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomIn}>
-                  <Text style={styles.zoomBtnText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            {/* Placeholder pour équilibrer */}
+            <View style={styles.modalHeaderPlaceholder} />
           </View>
 
           {/* Contenu modal */}
@@ -531,35 +462,21 @@ export default function ResultatScreen() {
                 </View>
               </View>
             ) : (
-              // Mode photo unique avec ZOOM
-              <View style={styles.singlePhotoContainer} {...panResponder.panHandlers}>
-                {(photoViewMode === 'before' ? photoBeforeUri : photoAfterUri) ? (
-                  <Animated.Image 
-                    source={{ uri: photoViewMode === 'before' ? photoBeforeUri : photoAfterUri }} 
-                    style={[
-                      styles.singleImage,
-                      {
-                        transform: [
-                          { scale: scaleAnim },
-                          { translateX: translateX },
-                          { translateY: translateY },
-                        ]
-                      }
-                    ]}
-                    resizeMode="contain"
-                  />
-                ) : (
+              // Mode photo unique avec ImageViewer (pinch-to-zoom + déplacement)
+              <ImageViewer
+                uri={photoViewMode === 'before' ? photoBeforeUri : photoAfterUri}
+                placeholder={
                   <View style={styles.singlePlaceholder}>
                     <Text style={styles.singlePlaceholderText}>
                       Photo {photoViewMode === 'before' ? 'AVANT' : 'APRÈS'} non disponible
                     </Text>
                   </View>
-                )}
-              </View>
+                }
+              />
             )}
           </View>
 
-          {/* Label et instructions */}
+          {/* Footer modal */}
           <View style={styles.modalFooter}>
             {photoViewMode !== 'compare' && (
               <Text style={styles.singleLabel}>
@@ -572,16 +489,9 @@ export default function ResultatScreen() {
             <Text style={styles.modalHint}>
               {photoViewMode === 'compare' 
                 ? 'Comparez les 3 derniers chiffres du compteur'
-                : zoomLevel > 1 
-                  ? 'Faites glisser pour déplacer • Appuyez sur − pour dézoomer'
-                  : 'Utilisez +/- pour zoomer'
+                : 'Pincez pour zoomer • Glissez pour déplacer • Double-tap = zoom x2.5'
               }
             </Text>
-            {zoomLevel > 1 && photoViewMode !== 'compare' && (
-              <TouchableOpacity style={styles.resetZoomBtn} onPress={resetZoom}>
-                <Text style={styles.resetZoomText}>Réinitialiser le zoom</Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
       </Modal>
@@ -941,9 +851,9 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
   },
   modalCloseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -974,33 +884,8 @@ const styles = StyleSheet.create({
   modalTabTextActive: {
     color: '#FFF',
   },
-  zoomControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 20,
-    padding: 4,
-  },
-  zoomBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoomBtnText: {
-    color: '#FFF',
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  zoomText: {
-    color: '#FFF',
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-    marginHorizontal: Spacing.sm,
-    minWidth: 40,
-    textAlign: 'center',
+  modalHeaderPlaceholder: {
+    width: 44,
   },
   modalContent: {
     flex: 1,
@@ -1046,17 +931,7 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.lg,
   },
 
-  // Mode photo unique avec zoom
-  singlePhotoContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  singleImage: {
-    width: screenWidth,
-    height: screenHeight * 0.7,
-  },
+  // Placeholder pour ImageViewer
   singlePlaceholder: {
     width: '90%',
     height: '80%',
@@ -1086,16 +961,5 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     fontSize: FontSizes.sm,
     textAlign: 'center',
-  },
-  resetZoomBtn: {
-    marginTop: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: 12,
-  },
-  resetZoomText: {
-    color: '#FFF',
-    fontSize: FontSizes.sm,
   },
 });

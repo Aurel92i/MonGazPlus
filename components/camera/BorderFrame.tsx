@@ -55,7 +55,7 @@ export function BorderFrame({
         return '○ Presque aligné...';
       case 'not_aligned':
       default:
-        return '◌ Alignez le compteur';
+        return '◌ Alignez les deux photos';
     }
   };
 

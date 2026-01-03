@@ -2,12 +2,12 @@
  * Écran de capture Photo AVANT
  * 
  * Mode paysage avec :
- * - Zoom ajustable (slider) - corrigé pour répondre immédiatement
+ * - Zoom ajustable (slider + boutons) - CORRIGÉ pour 1er clic
  * - Cadre aux 3/4 supérieurs
  * - Sauvegarde des paramètres de cadrage pour photo 2
  */
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -25,8 +25,7 @@ export default function PhotoAvantScreen() {
   const camera = useCamera();
   
   const [showTips, setShowTips] = useState(true);
-  const [zoom, setZoom] = useState(0); // 0 = pas de zoom, 1 = max zoom
-  const [displayZoom, setDisplayZoom] = useState(1); // Pour affichage
+  const [zoom, setZoom] = useState(0); // 0-1 pour la caméra
   
   // Forcer le mode paysage au montage
   useEffect(() => {
@@ -57,24 +56,23 @@ export default function PhotoAvantScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Mise à jour du zoom avec callback
-  const handleZoomChange = useCallback((value: number) => {
+  // Valeur d'affichage du zoom (1x à 5x)
+  const displayZoom = 1 + zoom * 4;
+
+  // Gestion du slider
+  const handleZoomChange = (value: number) => {
     setZoom(value);
-    setDisplayZoom(1 + value * 4); // 1x à 5x
-  }, []);
+  };
 
-  // Boutons +/- pour le zoom
-  const incrementZoom = useCallback(() => {
-    const newZoom = Math.min(1, zoom + 0.1);
-    setZoom(newZoom);
-    setDisplayZoom(1 + newZoom * 4);
-  }, [zoom]);
+  // Bouton + - utilise setter fonctionnel pour garantir la valeur actuelle
+  const incrementZoom = () => {
+    setZoom(prevZoom => Math.min(1, prevZoom + 0.1));
+  };
 
-  const decrementZoom = useCallback(() => {
-    const newZoom = Math.max(0, zoom - 0.1);
-    setZoom(newZoom);
-    setDisplayZoom(1 + newZoom * 4);
-  }, [zoom]);
+  // Bouton -
+  const decrementZoom = () => {
+    setZoom(prevZoom => Math.max(0, prevZoom - 0.1));
+  };
 
   const handleCapture = async () => {
     // Sauvegarder le niveau de zoom pour la photo 2
@@ -173,15 +171,17 @@ export default function PhotoAvantScreen() {
           <Text style={styles.zoomLabel}>🔍 Zoom</Text>
           <Text style={styles.zoomValue}>{displayZoom.toFixed(1)}x</Text>
           
+          {/* Bouton + */}
           <TouchableOpacity 
             style={styles.zoomBtnLarge}
-            onPress={incrementZoom}
-            activeOpacity={0.7}
+            onPressIn={incrementZoom}
+            activeOpacity={0.6}
           >
             <Text style={styles.zoomBtnText}>+</Text>
           </TouchableOpacity>
           
-          <View style={styles.zoomSliderContainer}>
+          {/* Slider vertical */}
+          <View style={styles.zoomSliderWrapper}>
             <Slider
               style={styles.zoomSlider}
               minimumValue={0}
@@ -194,10 +194,11 @@ export default function PhotoAvantScreen() {
             />
           </View>
           
+          {/* Bouton - */}
           <TouchableOpacity 
             style={styles.zoomBtnLarge}
-            onPress={decrementZoom}
-            activeOpacity={0.7}
+            onPressIn={decrementZoom}
+            activeOpacity={0.6}
           >
             <Text style={styles.zoomBtnText}>−</Text>
           </TouchableOpacity>
@@ -315,12 +316,13 @@ const styles = StyleSheet.create({
   zoomControlContainer: {
     position: 'absolute',
     left: Spacing.md,
-    top: 60,
-    bottom: 30,
-    width: 65,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    top: 55,
+    bottom: 25,
+    width: 60,
+    backgroundColor: 'rgba(0,0,0,0.75)',
     borderRadius: BorderRadius.lg,
-    padding: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
     zIndex: 25,
@@ -335,37 +337,40 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.lg,
     fontWeight: '700',
   },
-  zoomSliderContainer: {
+  zoomSliderWrapper: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     width: '100%',
+    marginVertical: Spacing.xs,
   },
   zoomSlider: {
-    width: 140,
+    width: 120,
     height: 40,
     transform: [{ rotate: '-90deg' }],
   },
   zoomBtnLarge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.veaOk,
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomBtnText: {
     color: '#FFF',
-    fontSize: 28,
-    fontWeight: '600',
-    lineHeight: 32,
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 34,
+    marginTop: -2,
   },
 
   // Capture (droite)
   captureZone: {
     position: 'absolute',
     right: Spacing.md,
-    top: 60,
-    bottom: 30,
+    top: 55,
+    bottom: 25,
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,

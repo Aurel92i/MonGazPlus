@@ -304,7 +304,7 @@ export default function PhotoApresScreen() {
       case 'almost_aligned':
         return "○ Presque aligné - Restez immobile";
       default:
-        return "Alignez le fantôme avec le compteur";
+        return "Alignez les deux photos";
     }
   };
 
@@ -535,9 +535,13 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // Bouton "Reprendre une photo" central
+  // Bouton "Reprendre une photo" central - NE BLOQUE PAS les côtés
   readyButtonContainer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 80,
+    right: 80,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 30,
