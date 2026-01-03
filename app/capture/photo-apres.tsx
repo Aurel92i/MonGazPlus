@@ -1,35 +1,30 @@
 /**
  * Écran de capture Photo APRÈS
  * 
- * Mode paysage avec :
- * - Timer qui tourne en fond
- * - Bouton "Reprendre une photo" pour activer le mode capture
- * - Détection d'alignement avec le fantôme (code couleur)
- * - Capture automatique quand superposition détectée
- * - Capture manuelle possible quand aligné (vert)
+ * Interface épurée avec :
+ * - Header compact avec chronomètre XXL
+ * - Zoom info rehaussé à gauche
+ * - Contrôles fantôme rehaussés à droite
+ * - Cadre ⊓ avec arcs de coin
+ * - Footer compact avec bouton proéminent
  */
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, Vibration } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView } from 'expo-camera';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Accelerometer } from 'expo-sensors';
-import { Colors, Spacing, FontSizes, BorderRadius } from '@/constants/theme';
 import { useCamera } from '@/hooks';
 import { BorderFrame } from '@/components/camera';
 import { useVEAStore } from '@/stores/veaStore';
 
-// Temps recommandé en secondes (3 minutes)
+// Configuration
 const RECOMMENDED_TIME = 180;
-
-// Seuils d'alignement (en secondes de stabilité)
-const THRESHOLD_ALMOST_ALIGNED = 1.5;  // Orange : presque aligné
-const THRESHOLD_ALIGNED = 3;           // Vert : aligné (capture manuelle possible)
-const THRESHOLD_SUPERPOSED = 5;        // Capture automatique (chiffres superposés)
-
-// Seuil de mouvement pour l'accéléromètre
+const THRESHOLD_ALMOST_ALIGNED = 1.5;
+const THRESHOLD_ALIGNED = 3;
+const THRESHOLD_SUPERPOSED = 5;
 const MOVEMENT_THRESHOLD = 0.03;
 
 type AlignmentStatus = 'not_aligned' | 'almost_aligned' | 'aligned' | 'superposed';
@@ -40,44 +35,35 @@ export default function PhotoApresScreen() {
   const { captureState, frameSettings } = veaStore;
   const camera = useCamera();
   
-  // Timer principal
+  // États
   const [elapsedTime, setElapsedTime] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // État du mode capture
   const [readyToCapture, setReadyToCapture] = useState(false);
-  
-  // Détection d'alignement
   const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus>('not_aligned');
   const [stabilityDuration, setStabilityDuration] = useState(0);
-  const stableStartRef = useRef<number | null>(null);
-  const lastAccelRef = useRef({ x: 0, y: 0, z: 0 });
-  const alignmentIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // État de capture
   const [isCapturing, setIsCapturing] = useState(false);
-  
-  // Opacité du fantôme
   const [ghostOpacity, setGhostOpacity] = useState(0.4);
 
-  // Calculer le zoom normalisé (0-1) depuis le store (1-5)
+  // Refs
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const stableStartRef = useRef<number | null>(null);
+  const lastAccelRef = useRef({ x: 0, y: 0, z: 0 });
+
+  // Valeurs calculées
   const zoomValue = (frameSettings.zoom - 1) / 4;
+  const isTimeRecommended = elapsedTime >= RECOMMENDED_TIME;
+  const photoBeforeUri = captureState.photoBefore?.uri;
+  const timeRemaining = Math.max(0, RECOMMENDED_TIME - elapsedTime);
+  const progressPercent = Math.min((elapsedTime / RECOMMENDED_TIME) * 100, 100);
 
-  // Forcer le mode paysage
+  // ═══════════════════════════════════════════════════════════
+  // EFFETS
+  // ═══════════════════════════════════════════════════════════
+
   useEffect(() => {
-    const lockLandscape = async () => {
-      await ScreenOrientation.lockAsync(
-        ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT
-      );
-    };
-    lockLandscape();
-
-    return () => {
-      ScreenOrientation.unlockAsync();
-    };
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+    return () => { ScreenOrientation.unlockAsync(); };
   }, []);
 
-  // Timer - tourne en fond dès le montage
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setElapsedTime((prev) => {
@@ -86,17 +72,10 @@ export default function PhotoApresScreen() {
         return newTime;
       });
     }, 1000);
-
     veaStore.startTimer();
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
-  // Détection de stabilité et alignement via accéléromètre
   useEffect(() => {
     if (!readyToCapture) {
       setAlignmentStatus('not_aligned');
@@ -108,50 +87,32 @@ export default function PhotoApresScreen() {
 
     const startAccelerometer = async () => {
       const available = await Accelerometer.isAvailableAsync();
-      if (!available) {
-        // Fallback si accéléromètre non disponible
-        console.log('Accéléromètre non disponible');
-        return;
-      }
+      if (!available) return;
 
-      Accelerometer.setUpdateInterval(50); // 20 fps
+      Accelerometer.setUpdateInterval(50);
       
       subscription = Accelerometer.addListener((data) => {
         const { x, y, z } = data;
         const last = lastAccelRef.current;
         
-        // Calculer le mouvement
         const movement = Math.sqrt(
-          Math.pow(x - last.x, 2) +
-          Math.pow(y - last.y, 2) +
-          Math.pow(z - last.z, 2)
+          Math.pow(x - last.x, 2) + Math.pow(y - last.y, 2) + Math.pow(z - last.z, 2)
         );
         
         lastAccelRef.current = { x, y, z };
-        
         const now = Date.now();
         
         if (movement < MOVEMENT_THRESHOLD) {
-          // Téléphone stable
-          if (!stableStartRef.current) {
-            stableStartRef.current = now;
-          }
+          if (!stableStartRef.current) stableStartRef.current = now;
           
-          const duration = (now - stableStartRef.current) / 1000; // en secondes
+          const duration = (now - stableStartRef.current) / 1000;
           setStabilityDuration(duration);
           
-          // Déterminer le statut d'alignement
-          if (duration >= THRESHOLD_SUPERPOSED) {
-            setAlignmentStatus('superposed');
-          } else if (duration >= THRESHOLD_ALIGNED) {
-            setAlignmentStatus('aligned');
-          } else if (duration >= THRESHOLD_ALMOST_ALIGNED) {
-            setAlignmentStatus('almost_aligned');
-          } else {
-            setAlignmentStatus('not_aligned');
-          }
+          if (duration >= THRESHOLD_SUPERPOSED) setAlignmentStatus('superposed');
+          else if (duration >= THRESHOLD_ALIGNED) setAlignmentStatus('aligned');
+          else if (duration >= THRESHOLD_ALMOST_ALIGNED) setAlignmentStatus('almost_aligned');
+          else setAlignmentStatus('not_aligned');
         } else {
-          // Mouvement détecté - reset
           stableStartRef.current = null;
           setStabilityDuration(0);
           setAlignmentStatus('not_aligned');
@@ -160,29 +121,26 @@ export default function PhotoApresScreen() {
     };
 
     startAccelerometer();
-
     return () => {
-      if (subscription) {
-        subscription.remove();
-      }
+      if (subscription) subscription.remove();
       Accelerometer.removeAllListeners();
     };
   }, [readyToCapture]);
 
-  // Capture automatique quand superposé
   useEffect(() => {
     if (alignmentStatus === 'superposed' && readyToCapture && !isCapturing) {
-      Vibration.vibrate([0, 100, 100, 100]); // Double vibration
+      Vibration.vibrate([0, 100, 100, 100]);
       handleCapture();
     }
   }, [alignmentStatus, readyToCapture, isCapturing]);
 
-  // Permissions
   useEffect(() => {
-    if (camera.hasPermission === null) {
-      camera.askPermission();
-    }
+    if (camera.hasPermission === null) camera.askPermission();
   }, [camera.hasPermission]);
+
+  // ═══════════════════════════════════════════════════════════
+  // HANDLERS
+  // ═══════════════════════════════════════════════════════════
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -190,9 +148,6 @@ export default function PhotoApresScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isTimeRecommended = elapsedTime >= RECOMMENDED_TIME;
-
-  // Activer le mode capture
   const handleReadyToCapture = () => {
     if (elapsedTime < 30) {
       Alert.alert(
@@ -208,7 +163,6 @@ export default function PhotoApresScreen() {
     setReadyToCapture(true);
   };
 
-  // Annuler le mode capture
   const handleCancelCapture = () => {
     setReadyToCapture(false);
     setAlignmentStatus('not_aligned');
@@ -225,9 +179,7 @@ export default function PhotoApresScreen() {
     const photo = await camera.takePhoto();
 
     if (photo) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
       veaStore.stopTimer();
       veaStore.setPhotoAfter(photo);
       ScreenOrientation.unlockAsync();
@@ -239,7 +191,6 @@ export default function PhotoApresScreen() {
     }
   };
 
-  // Capture manuelle (possible seulement si aligné)
   const handleManualCapture = () => {
     if (alignmentStatus === 'aligned' || alignmentStatus === 'superposed') {
       handleCapture();
@@ -247,10 +198,6 @@ export default function PhotoApresScreen() {
   };
 
   const handleClose = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    
     Alert.alert(
       'Abandonner le test ?',
       'Le test sera annulé et vous devrez recommencer.',
@@ -260,6 +207,7 @@ export default function PhotoApresScreen() {
           text: 'Abandonner', 
           style: 'destructive',
           onPress: () => {
+            if (timerRef.current) clearInterval(timerRef.current);
             veaStore.resetSession();
             ScreenOrientation.unlockAsync();
             router.back();
@@ -270,54 +218,23 @@ export default function PhotoApresScreen() {
   };
 
   const adjustOpacity = (delta: number) => {
-    setGhostOpacity((prev) => Math.max(0.1, Math.min(0.7, prev + delta)));
+    setGhostOpacity((prev) => Math.max(0.1, Math.min(0.8, prev + delta)));
   };
 
-  const photoBeforeUri = captureState.photoBefore?.uri;
-
-  // Convertir le statut d'alignement pour le BorderFrame
-  const getFrameStatus = () => {
-    if (isCapturing) return 'aligned';
-    if (!readyToCapture) return 'not_aligned';
-    
-    switch (alignmentStatus) {
-      case 'superposed':
-      case 'aligned':
-        return 'aligned';
-      case 'almost_aligned':
-        return 'almost_aligned';
-      default:
-        return 'not_aligned';
-    }
-  };
-
-  // Message d'instruction selon l'état
-  const getInstructionText = () => {
-    if (isCapturing) return "📸 Capture en cours...";
-    if (!readyToCapture) return "Appuyez sur le bouton quand vous êtes prêt";
-    
-    switch (alignmentStatus) {
-      case 'superposed':
-        return "✓ Superposition parfaite - Capture auto !";
-      case 'aligned':
-        return "✓ Aligné - Capture manuelle possible";
-      case 'almost_aligned':
-        return "○ Presque aligné - Restez immobile";
-      default:
-        return "Alignez les deux photos";
-    }
-  };
-
-  // Progression vers l'alignement (pour la barre)
   const getAlignmentProgress = () => {
     if (!readyToCapture) return 0;
     return Math.min(stabilityDuration / THRESHOLD_SUPERPOSED, 1);
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // RENDU
+  // ═══════════════════════════════════════════════════════════
+
   return (
     <View style={styles.container}>
       <StatusBar hidden />
       
+      {/* CAMÉRA */}
       <View style={styles.cameraContainer}>
         {camera.hasPermission && (
           <CameraView
@@ -329,203 +246,162 @@ export default function PhotoApresScreen() {
           />
         )}
 
-        {/* Mode fantôme */}
+        {/* Fantôme */}
         {photoBeforeUri && !isCapturing && (
           <View style={[styles.ghostOverlay, { opacity: ghostOpacity }]}>
-            <Image
-              source={{ uri: photoBeforeUri }}
-              style={styles.ghostImage}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: photoBeforeUri }} style={styles.ghostImage} resizeMode="cover" />
           </View>
         )}
 
-        {/* Cadre */}
-        <BorderFrame
-          status={getFrameStatus()}
-          instructions={getInstructionText()}
+        {/* Guide ⊓ avec coins */}
+        <BorderFrame 
+          color="#4ADE80" 
+          thickness={4} 
+          margin={100} 
+          sideHeightPercent={55} 
+          topOffset={55}
         />
+      </View>
 
-        {/* Bouton central "Reprendre une photo" */}
-        {!readyToCapture && !isCapturing && (
-          <View style={styles.readyButtonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.readyButton,
-                isTimeRecommended && styles.readyButtonGreen
-              ]}
-              onPress={handleReadyToCapture}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.readyButtonIcon}>📸</Text>
-              <Text style={styles.readyButtonText}>
-                Reprendre une photo
-              </Text>
-              <Text style={styles.readyButtonHint}>
-                {isTimeRecommended 
-                  ? '✓ Temps recommandé atteint'
-                  : `Temps écoulé : ${formatTime(elapsedTime)}`
-                }
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+      {/* HEADER COMPACT */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleClose} style={styles.closeBtn} disabled={isCapturing}>
+          <Text style={styles.closeBtnText}>✕</Text>
+        </TouchableOpacity>
+        
+        {/* Chronomètre XXL */}
+        <View style={[styles.timerContainer, isTimeRecommended && styles.timerContainerReady]}>
+          <Text style={[styles.timerText, isTimeRecommended && styles.timerTextReady]}>
+            {formatTime(elapsedTime)}
+          </Text>
+        </View>
+        
+        <View style={styles.titleContainer}>
+          <Text style={styles.titleText}>PHOTO APRÈS</Text>
+          <Text style={styles.stepText}>Étape 2/2</Text>
+        </View>
+      </View>
 
-        {/* Indicateur d'alignement (visible en mode capture) */}
-        {readyToCapture && !isCapturing && (
-          <View style={styles.alignmentIndicator}>
-            {/* Barre de progression */}
-            <View style={styles.alignmentBar}>
-              <View 
-                style={[
-                  styles.alignmentFill,
-                  { 
-                    width: `${getAlignmentProgress() * 100}%`,
-                    backgroundColor: 
-                      alignmentStatus === 'aligned' || alignmentStatus === 'superposed' 
-                        ? Colors.veaOk 
-                        : alignmentStatus === 'almost_aligned'
-                          ? Colors.primary
-                          : Colors.veaFuite,
-                  }
-                ]} 
-              />
-              {/* Marqueurs */}
-              <View style={[styles.marker, { left: `${(THRESHOLD_ALMOST_ALIGNED / THRESHOLD_SUPERPOSED) * 100}%` }]} />
-              <View style={[styles.marker, { left: `${(THRESHOLD_ALIGNED / THRESHOLD_SUPERPOSED) * 100}%` }]} />
-            </View>
-            
-            {/* Labels */}
-            <View style={styles.alignmentLabels}>
-              <Text style={styles.alignmentLabelText}>Alignement</Text>
-              <Text style={[
-                styles.alignmentStatusText,
-                { color: alignmentStatus === 'aligned' || alignmentStatus === 'superposed' ? Colors.veaOk : '#FFF' }
-              ]}>
-                {alignmentStatus === 'superposed' ? 'SUPERPOSÉ !' : 
-                 alignmentStatus === 'aligned' ? 'ALIGNÉ' :
-                 alignmentStatus === 'almost_aligned' ? 'PRESQUE...' : 'BOUGÉ'}
-              </Text>
-            </View>
-            
-            {/* Bouton capture manuelle (visible seulement si aligné) */}
-            {(alignmentStatus === 'aligned' || alignmentStatus === 'superposed') && (
-              <TouchableOpacity 
-                style={styles.manualCaptureBtn}
-                onPress={handleManualCapture}
-              >
-                <Text style={styles.manualCaptureBtnText}>📸 Capturer maintenant</Text>
-              </TouchableOpacity>
-            )}
-            
-            {/* Bouton annuler */}
-            <TouchableOpacity 
-              style={styles.cancelCaptureButton}
-              onPress={handleCancelCapture}
-            >
-              <Text style={styles.cancelCaptureText}>Annuler</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+      {/* ZOOM INFO - REHAUSSÉ */}
+      <View style={styles.zoomInfo}>
+        <Text style={styles.zoomIcon}>🔍</Text>
+        <Text style={styles.zoomText}>{frameSettings.zoom.toFixed(1)}x</Text>
+      </View>
 
-        {/* Header */}
-        <View style={styles.headerOverlay}>
-          <TouchableOpacity 
-            onPress={handleClose} 
-            style={styles.closeButton}
-            disabled={isCapturing}
-          >
-            <Text style={styles.closeButtonText}>✕</Text>
+      {/* CONTRÔLES FANTÔME - REHAUSSÉS */}
+      {!isCapturing && (
+        <View style={styles.ghostControls}>
+          <Text style={styles.ghostIcon}>👻</Text>
+          <TouchableOpacity style={styles.ghostBtn} onPress={() => adjustOpacity(0.1)}>
+            <Text style={styles.ghostBtnText}>+</Text>
           </TouchableOpacity>
-          
-          {/* Timer */}
-          <View style={[
-            styles.timerBadge,
-            isTimeRecommended && styles.timerBadgeReady
-          ]}>
-            <Text style={styles.timerIcon}>⏱️</Text>
-            <Text style={[
-              styles.timerText,
-              isTimeRecommended && styles.timerTextReady
-            ]}>
-              {formatTime(elapsedTime)}
-            </Text>
-          </View>
-
-          <View style={styles.headerInfo}>
-            <Text style={styles.stepText}>PHOTO APRÈS</Text>
-            <Text style={styles.stepNumber}>Étape 2/2</Text>
-          </View>
+          <Text style={styles.ghostValue}>{Math.round(ghostOpacity * 100)}%</Text>
+          <TouchableOpacity style={styles.ghostBtn} onPress={() => adjustOpacity(-0.1)}>
+            <Text style={styles.ghostBtnText}>−</Text>
+          </TouchableOpacity>
         </View>
+      )}
 
-        {/* Zoom indicator */}
-        <View style={styles.zoomIndicator}>
-          <Text style={styles.zoomText}>🔒 Zoom {frameSettings.zoom.toFixed(1)}x</Text>
-        </View>
-
-        {/* Contrôles opacité */}
-        {!isCapturing && (
-          <View style={styles.opacityControls}>
-            <Text style={styles.opacityLabel}>👻</Text>
-            <TouchableOpacity 
-              style={styles.opacityBtn} 
-              onPress={() => adjustOpacity(0.1)}
-            >
-              <Text style={styles.opacityBtnText}>+</Text>
-            </TouchableOpacity>
-            <Text style={styles.opacityValue}>{Math.round(ghostOpacity * 100)}%</Text>
-            <TouchableOpacity 
-              style={styles.opacityBtn} 
-              onPress={() => adjustOpacity(-0.1)}
-            >
-              <Text style={styles.opacityBtnText}>−</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Barre de temps en bas - REHAUSSÉE */}
-        {!readyToCapture && !isTimeRecommended && !isCapturing && (
-          <View style={styles.timeHintBar}>
+      {/* FOOTER COMPACT */}
+      <View style={styles.footer}>
+        
+        {/* Barre de progression (si pas encore 3min) */}
+        {!isTimeRecommended && !readyToCapture && !isCapturing && (
+          <View style={styles.progressSection}>
             <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  { width: `${(elapsedTime / RECOMMENDED_TIME) * 100}%` }
-                ]} 
-              />
+              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
             </View>
-            <Text style={styles.timeHintText}>
-              Recommandé : encore {formatTime(RECOMMENDED_TIME - elapsedTime)}
-            </Text>
+            <Text style={styles.progressText}>Encore {formatTime(timeRemaining)}</Text>
           </View>
         )}
 
-        {/* Overlay de capture */}
-        {isCapturing && (
-          <View style={styles.capturingOverlay}>
-            <Text style={styles.capturingText}>📸</Text>
-            <Text style={styles.capturingLabel}>Capture en cours...</Text>
+        {/* Message temps atteint */}
+        {isTimeRecommended && !readyToCapture && !isCapturing && (
+          <Text style={styles.readyText}>✓ Temps recommandé atteint</Text>
+        )}
+
+        {/* BOUTON PRINCIPAL */}
+        {!readyToCapture && !isCapturing && (
+          <TouchableOpacity
+            style={[styles.mainButton, isTimeRecommended && styles.mainButtonGreen]}
+            onPress={handleReadyToCapture}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.mainButtonIcon}>📸</Text>
+            <Text style={styles.mainButtonText}>Reprendre une photo</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Mode capture - Alignement */}
+        {readyToCapture && !isCapturing && (
+          <View style={styles.captureMode}>
+            <View style={styles.alignmentSection}>
+              <View style={styles.alignmentBar}>
+                <View 
+                  style={[
+                    styles.alignmentFill,
+                    { 
+                      width: `${getAlignmentProgress() * 100}%`,
+                      backgroundColor: 
+                        alignmentStatus === 'aligned' || alignmentStatus === 'superposed' 
+                          ? '#4ADE80' 
+                          : alignmentStatus === 'almost_aligned' ? '#F97316' : '#EF4444',
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={[
+                styles.alignmentText,
+                { color: (alignmentStatus === 'aligned' || alignmentStatus === 'superposed') ? '#4ADE80' : '#FFF' }
+              ]}>
+                {alignmentStatus === 'superposed' ? '✓ SUPERPOSÉ !' : 
+                 alignmentStatus === 'aligned' ? '✓ ALIGNÉ' :
+                 alignmentStatus === 'almost_aligned' ? 'Immobile...' : 'Alignez'}
+              </Text>
+            </View>
+
+            <View style={styles.captureButtons}>
+              {(alignmentStatus === 'aligned' || alignmentStatus === 'superposed') && (
+                <TouchableOpacity style={styles.captureBtn} onPress={handleManualCapture}>
+                  <Text style={styles.captureBtnText}>📸 Capturer</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelCapture}>
+                <Text style={styles.cancelBtnText}>Annuler</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
+
+      {/* OVERLAY CAPTURE */}
+      {isCapturing && (
+        <View style={styles.capturingOverlay}>
+          <Text style={styles.capturingIcon}>📸</Text>
+          <Text style={styles.capturingText}>Capture...</Text>
+        </View>
+      )}
     </View>
   );
 }
+
+// ═══════════════════════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════════════════════
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
   },
+
+  // CAMÉRA
   cameraContainer: {
-    flex: 1,
-    position: 'relative',
+    ...StyleSheet.absoluteFillObject,
   },
   camera: {
     flex: 1,
   },
-  
-  // Fantôme
   ghostOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 5,
@@ -535,276 +411,257 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // Bouton "Reprendre une photo" central - NE BLOQUE PAS les côtés
-  readyButtonContainer: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 80,
-    right: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 30,
-  },
-  readyButton: {
-    backgroundColor: 'rgba(249, 115, 22, 0.95)',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.xl,
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: Colors.primary,
-    minWidth: 250,
-  },
-  readyButtonGreen: {
-    backgroundColor: 'rgba(34, 197, 94, 0.95)',
-    borderColor: Colors.veaOk,
-  },
-  readyButtonIcon: {
-    fontSize: 48,
-    marginBottom: Spacing.sm,
-  },
-  readyButtonText: {
-    color: '#FFF',
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-  },
-  readyButtonHint: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: FontSizes.sm,
-    marginTop: Spacing.xs,
-  },
-
-  // Indicateur d'alignement
-  alignmentIndicator: {
-    position: 'absolute',
-    bottom: 80, // REHAUSSÉ
-    left: 90,
-    right: 90,
-    alignItems: 'center',
-    zIndex: 25,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-  },
-  alignmentBar: {
-    width: '100%',
-    height: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 6,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  alignmentFill: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  marker: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 2,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  alignmentLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginTop: Spacing.xs,
-  },
-  alignmentLabelText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: FontSizes.xs,
-  },
-  alignmentStatusText: {
-    fontSize: FontSizes.sm,
-    fontWeight: '700',
-  },
-  manualCaptureBtn: {
-    marginTop: Spacing.md,
-    backgroundColor: Colors.veaOk,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-  },
-  manualCaptureBtnText: {
-    color: '#FFF',
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-  },
-  cancelCaptureButton: {
-    marginTop: Spacing.sm,
-    paddingVertical: Spacing.xs,
-  },
-  cancelCaptureText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: FontSizes.sm,
-  },
-
-  // Header
-  headerOverlay: {
+  // HEADER COMPACT
+  header: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 20,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 100,
   },
-  closeButton: {
+  closeBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  closeButtonText: {
-    color: '#FFF',
-    fontSize: FontSizes.lg,
-  },
-  timerBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: 20,
   },
-  timerBadgeReady: {
+  closeBtnText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  timerContainer: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  timerContainerReady: {
     backgroundColor: 'rgba(34, 197, 94, 0.3)',
-    borderWidth: 1,
-    borderColor: Colors.veaOk,
-  },
-  timerIcon: {
-    fontSize: 14,
-    marginRight: Spacing.xs,
+    borderColor: '#4ADE80',
   },
   timerText: {
     color: '#FFF',
-    fontSize: FontSizes.md,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     fontVariant: ['tabular-nums'],
+    letterSpacing: 2,
   },
   timerTextReady: {
-    color: Colors.veaOk,
+    color: '#4ADE80',
   },
-  headerInfo: {
-    alignItems: 'center',
+  titleContainer: {
+    alignItems: 'flex-end',
   },
-  stepText: {
+  titleText: {
     color: '#FFF',
-    fontSize: FontSizes.md,
+    fontSize: 16,
     fontWeight: '700',
   },
-  stepNumber: {
-    color: Colors.primary,
-    fontSize: FontSizes.xs,
+  stepText: {
+    color: '#F97316',
+    fontSize: 11,
     fontWeight: '600',
   },
 
-  // Zoom indicator
-  zoomIndicator: {
+  // ZOOM INFO - REHAUSSÉ
+  zoomInfo: {
     position: 'absolute',
-    top: 50,
-    left: '50%',
-    transform: [{ translateX: -40 }],
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
-    zIndex: 20,
-  },
-  zoomText: {
-    color: '#FFF',
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
-  },
-
-  // Contrôles opacité
-  opacityControls: {
-    position: 'absolute',
-    left: Spacing.md,
+    left: 16,
     top: 70,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.sm,
-    zIndex: 25,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 10,
+    padding: 8,
+    zIndex: 50,
   },
-  opacityLabel: {
+  zoomIcon: {
+    fontSize: 18,
+  },
+  zoomText: {
+    color: '#4ADE80',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+
+  // CONTRÔLES FANTÔME - REHAUSSÉS
+  ghostControls: {
+    position: 'absolute',
+    right: 16,
+    top: 70,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 12,
+    padding: 8,
+    zIndex: 50,
+  },
+  ghostIcon: {
     fontSize: 20,
     marginBottom: 4,
   },
-  opacityBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
+  ghostBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
+    alignItems: 'center',
     marginVertical: 2,
   },
-  opacityBtnText: {
+  ghostBtnText: {
     color: '#FFF',
-    fontSize: FontSizes.lg,
+    fontSize: 20,
     fontWeight: '600',
   },
-  opacityValue: {
+  ghostValue: {
     color: '#FFF',
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     marginVertical: 2,
   },
 
-  // Barre de temps - REHAUSSÉE
-  timeHintBar: {
+  // FOOTER COMPACT
+  footer: {
     position: 'absolute',
-    bottom: 40, // REHAUSSÉ depuis 0
-    left: 70,
-    right: 70,
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    zIndex: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    zIndex: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressSection: {
+    flex: 1,
+    marginRight: 16,
   },
   progressBar: {
-    height: 4,
+    height: 6,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
-    marginBottom: 4,
+    borderRadius: 3,
+    overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 2,
+    backgroundColor: '#F97316',
+    borderRadius: 3,
   },
-  timeHintText: {
-    color: '#AAA',
-    fontSize: FontSizes.xs,
-    textAlign: 'center',
+  progressText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    marginTop: 4,
+  },
+  readyText: {
+    color: '#4ADE80',
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
   },
 
-  // Overlay capture
+  // BOUTON PRINCIPAL PROÉMINENT
+  mainButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F97316',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#FB923C',
+  },
+  mainButtonGreen: {
+    backgroundColor: '#22C55E',
+    borderColor: '#4ADE80',
+  },
+  mainButtonIcon: {
+    fontSize: 22,
+    marginRight: 8,
+  },
+  mainButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // MODE CAPTURE
+  captureMode: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  alignmentSection: {
+    flex: 1,
+    marginRight: 16,
+  },
+  alignmentBar: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  alignmentFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  alignmentText: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  captureButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  captureBtn: {
+    backgroundColor: '#22C55E',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  captureBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  cancelBtnText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+  },
+
+  // OVERLAY CAPTURE
   capturingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(34, 197, 94, 0.3)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 50,
+    zIndex: 200,
+  },
+  capturingIcon: {
+    fontSize: 56,
+    marginBottom: 12,
   },
   capturingText: {
-    fontSize: 80,
-  },
-  capturingLabel: {
     color: '#FFF',
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-    marginTop: Spacing.md,
+    fontSize: 20,
+    fontWeight: '600',
   },
 });

@@ -1,114 +1,124 @@
 /**
- * BorderFrame - Cadre d'alignement pour compteur gaz
+ * BorderFrame - Guide d'alignement avec repères d'angle
  * 
- * Le cadre couvre les 3/4 supérieurs de l'écran caméra.
- * L'utilisateur aligne les bordures du compteur avec ce cadre.
- * 
- * Code couleur :
- * - Rouge : pas aligné
- * - Orange : presque aligné  
- * - Vert : aligné, prêt à capturer
+ * Forme ⊓ ouverte avec arcs de cercle dans les coins pour aider au cadrage.
+ * Les arcs ont un remplissage rayé semi-transparent (60%).
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
-import { Colors, FontSizes, Spacing } from '@/constants/theme';
-
-type AlignmentStatus = 'not_aligned' | 'almost_aligned' | 'aligned';
+import { View, StyleSheet, Dimensions } from 'react-native';
 
 interface BorderFrameProps {
-  /** Statut d'alignement */
-  status?: AlignmentStatus;
-  /** Instructions à afficher */
-  instructions?: string;
-  /** Masquer les instructions */
-  hideInstructions?: boolean;
+  /** Couleur de la ligne */
+  color?: string;
+  /** Épaisseur de la ligne */
+  thickness?: number;
+  /** Marge depuis les bords de l'écran */
+  margin?: number;
+  /** Hauteur des lignes latérales (en % de la hauteur disponible) */
+  sideHeightPercent?: number;
+  /** Décalage vertical depuis le haut */
+  topOffset?: number;
 }
 
 export function BorderFrame({
-  status = 'aligned',
-  instructions = 'Alignez les bords du compteur',
-  hideInstructions = false,
+  color = '#4ADE80',
+  thickness = 4,
+  margin = 80,
+  sideHeightPercent = 55,
+  topOffset = 60,
 }: BorderFrameProps) {
   
-  // Couleur selon le statut
-  const getColor = () => {
-    switch (status) {
-      case 'aligned':
-        return Colors.veaOk; // Vert
-      case 'almost_aligned':
-        return Colors.primary; // Orange
-      case 'not_aligned':
-      default:
-        return Colors.veaFuite; // Rouge
-    }
-  };
-
-  const frameColor = getColor();
-
-  // Texte de statut
-  const getStatusText = () => {
-    switch (status) {
-      case 'aligned':
-        return '✓ Aligné - Prêt à capturer';
-      case 'almost_aligned':
-        return '○ Presque aligné...';
-      case 'not_aligned':
-      default:
-        return '◌ Alignez les deux photos';
-    }
-  };
-
+  const cornerSize = 50; // Taille des arcs de coin
+  
   return (
-    <View style={styles.container}>
-      {/* Zone du cadre - 3/4 supérieurs */}
-      <View style={styles.frameZone}>
-        {/* Coin supérieur gauche */}
-        <View style={[styles.corner, styles.topLeft, { borderColor: frameColor }]} />
-        
-        {/* Coin supérieur droit */}
-        <View style={[styles.corner, styles.topRight, { borderColor: frameColor }]} />
-        
-        {/* Coin inférieur gauche (aux 3/4) */}
-        <View style={[styles.corner, styles.bottomLeft, { borderColor: frameColor }]} />
-        
-        {/* Coin inférieur droit (aux 3/4) */}
-        <View style={[styles.corner, styles.bottomRight, { borderColor: frameColor }]} />
-
-        {/* Ligne supérieure */}
-        <View style={[styles.line, styles.lineTop, { backgroundColor: frameColor }]} />
-        
-        {/* Ligne inférieure */}
-        <View style={[styles.line, styles.lineBottom, { backgroundColor: frameColor }]} />
-        
-        {/* Ligne gauche */}
-        <View style={[styles.line, styles.lineLeft, { backgroundColor: frameColor }]} />
-        
-        {/* Ligne droite */}
-        <View style={[styles.line, styles.lineRight, { backgroundColor: frameColor }]} />
-
-        {/* Croix centrale */}
-        <View style={styles.centerMark}>
-          <View style={[styles.crossH, { backgroundColor: frameColor }]} />
-          <View style={[styles.crossV, { backgroundColor: frameColor }]} />
-        </View>
-      </View>
-
-      {/* Instructions en haut */}
-      {!hideInstructions && (
-        <View style={styles.instructionsContainer}>
-          <View style={[styles.badge, { backgroundColor: frameColor }]}>
-            <Text style={styles.badgeText}>{instructions}</Text>
+    <View style={styles.container} pointerEvents="none">
+      
+      {/* ═══════════ COIN HAUT-GAUCHE ═══════════ */}
+      <View style={[styles.cornerContainer, { top: topOffset, left: margin }]}>
+        {/* Arc de cercle */}
+        <View style={[styles.cornerArc, styles.cornerTopLeft, { borderColor: color }]}>
+          {/* Rayures diagonales */}
+          <View style={styles.stripesContainer}>
+            {[...Array(8)].map((_, i) => (
+              <View 
+                key={i} 
+                style={[
+                  styles.stripe, 
+                  { 
+                    left: i * 8 - 20,
+                    backgroundColor: color,
+                  }
+                ]} 
+              />
+            ))}
           </View>
         </View>
-      )}
-
-      {/* Statut en bas de la zone de cadre */}
-      <View style={styles.statusContainer}>
-        <Text style={[styles.statusText, { color: frameColor }]}>
-          {getStatusText()}
-        </Text>
       </View>
+      
+      {/* ═══════════ COIN HAUT-DROIT ═══════════ */}
+      <View style={[styles.cornerContainer, { top: topOffset, right: margin }]}>
+        <View style={[styles.cornerArc, styles.cornerTopRight, { borderColor: color }]}>
+          <View style={styles.stripesContainer}>
+            {[...Array(8)].map((_, i) => (
+              <View 
+                key={i} 
+                style={[
+                  styles.stripe, 
+                  { 
+                    left: i * 8 - 20,
+                    backgroundColor: color,
+                  }
+                ]} 
+              />
+            ))}
+          </View>
+        </View>
+      </View>
+      
+      {/* ═══════════ LIGNES PRINCIPALES ═══════════ */}
+      
+      {/* Ligne du HAUT */}
+      <View 
+        style={[
+          styles.line,
+          { 
+            backgroundColor: color,
+            height: thickness,
+            left: margin + cornerSize,
+            right: margin + cornerSize,
+            top: topOffset,
+          }
+        ]} 
+      />
+      
+      {/* Ligne GAUCHE */}
+      <View 
+        style={[
+          styles.line,
+          { 
+            backgroundColor: color,
+            width: thickness,
+            left: margin,
+            top: topOffset + cornerSize,
+            height: `${sideHeightPercent - 15}%`,
+          }
+        ]} 
+      />
+      
+      {/* Ligne DROITE */}
+      <View 
+        style={[
+          styles.line,
+          { 
+            backgroundColor: color,
+            width: thickness,
+            right: margin,
+            top: topOffset + cornerSize,
+            height: `${sideHeightPercent - 15}%`,
+          }
+        ]} 
+      />
     </View>
   );
 }
@@ -116,135 +126,59 @@ export function BorderFrame({
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+  },
+  line: {
+    position: 'absolute',
   },
   
-  // Zone du cadre - 75% supérieurs
-  frameZone: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    height: '75%', // 3/4 de la hauteur
-  },
-
-  // Coins épais
-  corner: {
+  // Conteneur de coin
+  cornerContainer: {
     position: 'absolute',
     width: 50,
     height: 50,
-    borderWidth: 5,
+    overflow: 'hidden',
   },
-  topLeft: {
-    top: 0,
-    left: 0,
+  
+  // Arc de cercle de base
+  cornerArc: {
+    width: 50,
+    height: 50,
+    borderWidth: 4,
+    overflow: 'hidden',
+  },
+  
+  // Coin haut-gauche
+  cornerTopLeft: {
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
     borderRightWidth: 0,
     borderBottomWidth: 0,
+    borderTopLeftRadius: 20,
   },
-  topRight: {
-    top: 0,
-    right: 0,
+  
+  // Coin haut-droit
+  cornerTopRight: {
+    borderTopWidth: 4,
+    borderRightWidth: 4,
     borderLeftWidth: 0,
     borderBottomWidth: 0,
+    borderTopRightRadius: 20,
   },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
+  
+  // Container des rayures
+  stripesContainer: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.4, // 60% transparent = 40% visible
+    overflow: 'hidden',
   },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-  },
-
-  // Lignes entre les coins
-  line: {
+  
+  // Rayure individuelle
+  stripe: {
     position: 'absolute',
-    opacity: 0.6,
-  },
-  lineTop: {
-    top: 0,
-    left: 60,
-    right: 60,
-    height: 3,
-  },
-  lineBottom: {
-    bottom: 0,
-    left: 60,
-    right: 60,
-    height: 3,
-  },
-  lineLeft: {
-    left: 0,
-    top: 60,
-    bottom: 60,
     width: 3,
-  },
-  lineRight: {
-    right: 0,
-    top: 60,
-    bottom: 60,
-    width: 3,
-  },
-
-  // Croix centrale
-  centerMark: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -15 }, { translateY: -15 }],
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  crossH: {
-    position: 'absolute',
-    width: 24,
-    height: 2,
-    opacity: 0.5,
-  },
-  crossV: {
-    position: 'absolute',
-    width: 2,
-    height: 24,
-    opacity: 0.5,
-  },
-
-  // Badge d'instructions
-  instructionsContainer: {
-    position: 'absolute',
-    top: 70,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  badge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: 20,
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-
-  // Statut
-  statusContainer: {
-    position: 'absolute',
-    top: '68%', // Juste au-dessus de la limite des 75%
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  statusText: {
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 4,
+    height: 100,
+    transform: [{ rotate: '45deg' }],
+    top: -20,
   },
 });
