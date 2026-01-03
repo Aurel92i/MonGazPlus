@@ -3,12 +3,13 @@
  * 
  * Mode paysage avec :
  * - Timer qui tourne en fond
- * - Bouton "Reprendre une photo" pour déclencher la capture
- * - Capture automatique après 3s de stabilité (une fois activé)
- * - Temps synchronisé avec le store
+ * - Bouton "Reprendre une photo" pour activer le mode capture
+ * - Détection d'alignement avec le fantôme (code couleur)
+ * - Capture automatique quand superposition détectée
+ * - Capture manuelle possible quand aligné (vert)
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, Vibration } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -22,10 +23,16 @@ import { useVEAStore } from '@/stores/veaStore';
 
 // Temps recommandé en secondes (3 minutes)
 const RECOMMENDED_TIME = 180;
-// Temps de stabilité requis pour capture auto (ms) - 3 SECONDES
-const STABILITY_DURATION = 3000;
-// Seuil de mouvement
-const MOVEMENT_THRESHOLD = 0.05;
+
+// Seuils d'alignement (en secondes de stabilité)
+const THRESHOLD_ALMOST_ALIGNED = 1.5;  // Orange : presque aligné
+const THRESHOLD_ALIGNED = 3;           // Vert : aligné (capture manuelle possible)
+const THRESHOLD_SUPERPOSED = 5;        // Capture automatique (chiffres superposés)
+
+// Seuil de mouvement pour l'accéléromètre
+const MOVEMENT_THRESHOLD = 0.03;
+
+type AlignmentStatus = 'not_aligned' | 'almost_aligned' | 'aligned' | 'superposed';
 
 export default function PhotoApresScreen() {
   const router = useRouter();
@@ -40,11 +47,12 @@ export default function PhotoApresScreen() {
   // État du mode capture
   const [readyToCapture, setReadyToCapture] = useState(false);
   
-  // Stabilité pour capture auto
-  const [isStable, setIsStable] = useState(false);
-  const [stabilityProgress, setStabilityProgress] = useState(0);
+  // Détection d'alignement
+  const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus>('not_aligned');
+  const [stabilityDuration, setStabilityDuration] = useState(0);
   const stableStartRef = useRef<number | null>(null);
   const lastAccelRef = useRef({ x: 0, y: 0, z: 0 });
+  const alignmentIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // État de capture
   const [isCapturing, setIsCapturing] = useState(false);
@@ -74,7 +82,6 @@ export default function PhotoApresScreen() {
     timerRef.current = setInterval(() => {
       setElapsedTime((prev) => {
         const newTime = prev + 1;
-        // Synchroniser avec le store à chaque seconde
         veaStore.updateElapsedTime(newTime);
         return newTime;
       });
@@ -89,17 +96,25 @@ export default function PhotoApresScreen() {
     };
   }, []);
 
-  // Détection de stabilité via accéléromètre (seulement si readyToCapture)
+  // Détection de stabilité et alignement via accéléromètre
   useEffect(() => {
-    if (!readyToCapture) return;
+    if (!readyToCapture) {
+      setAlignmentStatus('not_aligned');
+      setStabilityDuration(0);
+      return;
+    }
     
     let subscription: any;
 
     const startAccelerometer = async () => {
       const available = await Accelerometer.isAvailableAsync();
-      if (!available) return;
+      if (!available) {
+        // Fallback si accéléromètre non disponible
+        console.log('Accéléromètre non disponible');
+        return;
+      }
 
-      Accelerometer.setUpdateInterval(100);
+      Accelerometer.setUpdateInterval(50); // 20 fps
       
       subscription = Accelerometer.addListener((data) => {
         const { x, y, z } = data;
@@ -122,18 +137,24 @@ export default function PhotoApresScreen() {
             stableStartRef.current = now;
           }
           
-          const stableDuration = now - stableStartRef.current;
-          const progress = Math.min(stableDuration / STABILITY_DURATION, 1);
-          setStabilityProgress(progress);
+          const duration = (now - stableStartRef.current) / 1000; // en secondes
+          setStabilityDuration(duration);
           
-          if (stableDuration >= STABILITY_DURATION) {
-            setIsStable(true);
+          // Déterminer le statut d'alignement
+          if (duration >= THRESHOLD_SUPERPOSED) {
+            setAlignmentStatus('superposed');
+          } else if (duration >= THRESHOLD_ALIGNED) {
+            setAlignmentStatus('aligned');
+          } else if (duration >= THRESHOLD_ALMOST_ALIGNED) {
+            setAlignmentStatus('almost_aligned');
+          } else {
+            setAlignmentStatus('not_aligned');
           }
         } else {
-          // Mouvement détecté
+          // Mouvement détecté - reset
           stableStartRef.current = null;
-          setStabilityProgress(0);
-          setIsStable(false);
+          setStabilityDuration(0);
+          setAlignmentStatus('not_aligned');
         }
       });
     };
@@ -148,14 +169,13 @@ export default function PhotoApresScreen() {
     };
   }, [readyToCapture]);
 
-  // Capture automatique quand stable (seulement si readyToCapture actif)
+  // Capture automatique quand superposé
   useEffect(() => {
-    if (isStable && readyToCapture && !isCapturing) {
-      // Vibration pour indiquer la capture
-      Vibration.vibrate(200);
-      handleAutoCapture();
+    if (alignmentStatus === 'superposed' && readyToCapture && !isCapturing) {
+      Vibration.vibrate([0, 100, 100, 100]); // Double vibration
+      handleCapture();
     }
-  }, [isStable, readyToCapture, isCapturing]);
+  }, [alignmentStatus, readyToCapture, isCapturing]);
 
   // Permissions
   useEffect(() => {
@@ -191,17 +211,15 @@ export default function PhotoApresScreen() {
   // Annuler le mode capture
   const handleCancelCapture = () => {
     setReadyToCapture(false);
-    setIsStable(false);
-    setStabilityProgress(0);
+    setAlignmentStatus('not_aligned');
+    setStabilityDuration(0);
     stableStartRef.current = null;
   };
 
-  const handleAutoCapture = async () => {
+  const handleCapture = async () => {
     if (isCapturing) return;
     
     setIsCapturing(true);
-    
-    // Sauvegarder le temps final dans le store AVANT la capture
     veaStore.updateElapsedTime(elapsedTime);
     
     const photo = await camera.takePhoto();
@@ -217,16 +235,15 @@ export default function PhotoApresScreen() {
     } else {
       Alert.alert('Erreur', 'Échec de la capture. Réessayez.');
       setIsCapturing(false);
-      setReadyToCapture(false);
+      handleCancelCapture();
     }
   };
 
+  // Capture manuelle (possible seulement si aligné)
   const handleManualCapture = () => {
-    if (!readyToCapture) {
-      handleReadyToCapture();
-      return;
+    if (alignmentStatus === 'aligned' || alignmentStatus === 'superposed') {
+      handleCapture();
     }
-    handleAutoCapture();
   };
 
   const handleClose = () => {
@@ -258,13 +275,43 @@ export default function PhotoApresScreen() {
 
   const photoBeforeUri = captureState.photoBefore?.uri;
 
-  // Couleur selon l'état
+  // Convertir le statut d'alignement pour le BorderFrame
   const getFrameStatus = () => {
     if (isCapturing) return 'aligned';
     if (!readyToCapture) return 'not_aligned';
-    if (isStable) return 'aligned';
-    if (stabilityProgress > 0.3) return 'almost_aligned';
-    return 'not_aligned';
+    
+    switch (alignmentStatus) {
+      case 'superposed':
+      case 'aligned':
+        return 'aligned';
+      case 'almost_aligned':
+        return 'almost_aligned';
+      default:
+        return 'not_aligned';
+    }
+  };
+
+  // Message d'instruction selon l'état
+  const getInstructionText = () => {
+    if (isCapturing) return "📸 Capture en cours...";
+    if (!readyToCapture) return "Appuyez sur le bouton quand vous êtes prêt";
+    
+    switch (alignmentStatus) {
+      case 'superposed':
+        return "✓ Superposition parfaite - Capture auto !";
+      case 'aligned':
+        return "✓ Aligné - Capture manuelle possible";
+      case 'almost_aligned':
+        return "○ Presque aligné - Restez immobile";
+      default:
+        return "Alignez le fantôme avec le compteur";
+    }
+  };
+
+  // Progression vers l'alignement (pour la barre)
+  const getAlignmentProgress = () => {
+    if (!readyToCapture) return 0;
+    return Math.min(stabilityDuration / THRESHOLD_SUPERPOSED, 1);
   };
 
   return (
@@ -296,15 +343,7 @@ export default function PhotoApresScreen() {
         {/* Cadre */}
         <BorderFrame
           status={getFrameStatus()}
-          instructions={
-            isCapturing 
-              ? "📸 Capture en cours..." 
-              : !readyToCapture
-                ? "Appuyez sur le bouton quand vous êtes prêt"
-                : isStable 
-                  ? "✓ Capture automatique..." 
-                  : "Restez immobile 3 secondes"
-          }
+          instructions={getInstructionText()}
         />
 
         {/* Bouton central "Reprendre une photo" */}
@@ -332,23 +371,52 @@ export default function PhotoApresScreen() {
           </View>
         )}
 
-        {/* Indicateur de stabilité (visible seulement en mode capture) */}
+        {/* Indicateur d'alignement (visible en mode capture) */}
         {readyToCapture && !isCapturing && (
-          <View style={styles.stabilityIndicator}>
-            <View style={styles.stabilityBar}>
+          <View style={styles.alignmentIndicator}>
+            {/* Barre de progression */}
+            <View style={styles.alignmentBar}>
               <View 
                 style={[
-                  styles.stabilityFill,
+                  styles.alignmentFill,
                   { 
-                    width: `${stabilityProgress * 100}%`,
-                    backgroundColor: stabilityProgress >= 1 ? Colors.veaOk : Colors.primary,
+                    width: `${getAlignmentProgress() * 100}%`,
+                    backgroundColor: 
+                      alignmentStatus === 'aligned' || alignmentStatus === 'superposed' 
+                        ? Colors.veaOk 
+                        : alignmentStatus === 'almost_aligned'
+                          ? Colors.primary
+                          : Colors.veaFuite,
                   }
                 ]} 
               />
+              {/* Marqueurs */}
+              <View style={[styles.marker, { left: `${(THRESHOLD_ALMOST_ALIGNED / THRESHOLD_SUPERPOSED) * 100}%` }]} />
+              <View style={[styles.marker, { left: `${(THRESHOLD_ALIGNED / THRESHOLD_SUPERPOSED) * 100}%` }]} />
             </View>
-            <Text style={styles.stabilityText}>
-              {stabilityProgress >= 1 ? '✓ Stable !' : 'Restez immobile...'}
-            </Text>
+            
+            {/* Labels */}
+            <View style={styles.alignmentLabels}>
+              <Text style={styles.alignmentLabelText}>Alignement</Text>
+              <Text style={[
+                styles.alignmentStatusText,
+                { color: alignmentStatus === 'aligned' || alignmentStatus === 'superposed' ? Colors.veaOk : '#FFF' }
+              ]}>
+                {alignmentStatus === 'superposed' ? 'SUPERPOSÉ !' : 
+                 alignmentStatus === 'aligned' ? 'ALIGNÉ' :
+                 alignmentStatus === 'almost_aligned' ? 'PRESQUE...' : 'BOUGÉ'}
+              </Text>
+            </View>
+            
+            {/* Bouton capture manuelle (visible seulement si aligné) */}
+            {(alignmentStatus === 'aligned' || alignmentStatus === 'superposed') && (
+              <TouchableOpacity 
+                style={styles.manualCaptureBtn}
+                onPress={handleManualCapture}
+              >
+                <Text style={styles.manualCaptureBtnText}>📸 Capturer maintenant</Text>
+              </TouchableOpacity>
+            )}
             
             {/* Bouton annuler */}
             <TouchableOpacity 
@@ -370,7 +438,7 @@ export default function PhotoApresScreen() {
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
           
-          {/* Timer - toujours visible et actif */}
+          {/* Timer */}
           <View style={[
             styles.timerBadge,
             isTimeRecommended && styles.timerBadgeReady
@@ -390,7 +458,7 @@ export default function PhotoApresScreen() {
           </View>
         </View>
 
-        {/* Zoom indicator (verrouillé) */}
+        {/* Zoom indicator */}
         <View style={styles.zoomIndicator}>
           <Text style={styles.zoomText}>🔒 Zoom {frameSettings.zoom.toFixed(1)}x</Text>
         </View>
@@ -415,7 +483,7 @@ export default function PhotoApresScreen() {
           </View>
         )}
 
-        {/* Barre de temps en bas (quand pas en mode capture) */}
+        {/* Barre de temps en bas - REHAUSSÉE */}
         {!readyToCapture && !isTimeRecommended && !isCapturing && (
           <View style={styles.timeHintBar}>
             <View style={styles.progressBar}>
@@ -503,46 +571,70 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
 
-  // Indicateur de stabilité
-  stabilityIndicator: {
+  // Indicateur d'alignement
+  alignmentIndicator: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 80, // REHAUSSÉ
     left: 90,
     right: 90,
     alignItems: 'center',
     zIndex: 25,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
   },
-  stabilityBar: {
+  alignmentBar: {
     width: '100%',
-    height: 10,
+    height: 12,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 5,
+    borderRadius: 6,
     overflow: 'hidden',
+    position: 'relative',
   },
-  stabilityFill: {
+  alignmentFill: {
     height: '100%',
-    borderRadius: 5,
+    borderRadius: 6,
   },
-  stabilityText: {
-    color: '#FFF',
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    marginTop: Spacing.sm,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+  marker: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
-  cancelCaptureButton: {
+  alignmentLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: Spacing.xs,
+  },
+  alignmentLabelText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: FontSizes.xs,
+  },
+  alignmentStatusText: {
+    fontSize: FontSizes.sm,
+    fontWeight: '700',
+  },
+  manualCaptureBtn: {
     marginTop: Spacing.md,
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+    backgroundColor: Colors.veaOk,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.lg,
   },
-  cancelCaptureText: {
+  manualCaptureBtnText: {
     color: '#FFF',
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  cancelCaptureButton: {
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  cancelCaptureText: {
+    color: 'rgba(255,255,255,0.6)',
     fontSize: FontSizes.sm,
-    fontWeight: '600',
   },
 
   // Header
@@ -666,14 +758,15 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
 
-  // Barre de temps
+  // Barre de temps - REHAUSSÉE
   timeHintBar: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 40, // REHAUSSÉ depuis 0
     left: 70,
     right: 70,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
     zIndex: 20,
   },
   progressBar: {

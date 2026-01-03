@@ -2,12 +2,12 @@
  * Écran de capture Photo AVANT
  * 
  * Mode paysage avec :
- * - Zoom ajustable (slider)
+ * - Zoom ajustable (slider) - corrigé pour répondre immédiatement
  * - Cadre aux 3/4 supérieurs
  * - Sauvegarde des paramètres de cadrage pour photo 2
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -26,6 +26,7 @@ export default function PhotoAvantScreen() {
   
   const [showTips, setShowTips] = useState(true);
   const [zoom, setZoom] = useState(0); // 0 = pas de zoom, 1 = max zoom
+  const [displayZoom, setDisplayZoom] = useState(1); // Pour affichage
   
   // Forcer le mode paysage au montage
   useEffect(() => {
@@ -56,9 +57,28 @@ export default function PhotoAvantScreen() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Mise à jour du zoom avec callback
+  const handleZoomChange = useCallback((value: number) => {
+    setZoom(value);
+    setDisplayZoom(1 + value * 4); // 1x à 5x
+  }, []);
+
+  // Boutons +/- pour le zoom
+  const incrementZoom = useCallback(() => {
+    const newZoom = Math.min(1, zoom + 0.1);
+    setZoom(newZoom);
+    setDisplayZoom(1 + newZoom * 4);
+  }, [zoom]);
+
+  const decrementZoom = useCallback(() => {
+    const newZoom = Math.max(0, zoom - 0.1);
+    setZoom(newZoom);
+    setDisplayZoom(1 + newZoom * 4);
+  }, [zoom]);
+
   const handleCapture = async () => {
     // Sauvegarder le niveau de zoom pour la photo 2
-    veaStore.setZoom(1 + zoom * 4); // zoom 1x à 5x
+    veaStore.setZoom(displayZoom);
     
     const photo = await camera.takePhoto();
 
@@ -151,33 +171,36 @@ export default function PhotoAvantScreen() {
         {/* Contrôle de zoom (côté gauche) */}
         <View style={styles.zoomControlContainer}>
           <Text style={styles.zoomLabel}>🔍 Zoom</Text>
+          <Text style={styles.zoomValue}>{displayZoom.toFixed(1)}x</Text>
+          
+          <TouchableOpacity 
+            style={styles.zoomBtnLarge}
+            onPress={incrementZoom}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.zoomBtnText}>+</Text>
+          </TouchableOpacity>
+          
           <View style={styles.zoomSliderContainer}>
-            <Text style={styles.zoomValue}>{Math.round((1 + zoom * 4) * 10) / 10}x</Text>
             <Slider
               style={styles.zoomSlider}
               minimumValue={0}
               maximumValue={1}
               value={zoom}
-              onValueChange={setZoom}
+              onValueChange={handleZoomChange}
               minimumTrackTintColor={Colors.veaOk}
               maximumTrackTintColor="rgba(255,255,255,0.3)"
               thumbTintColor={Colors.veaOk}
             />
           </View>
-          <View style={styles.zoomButtons}>
-            <TouchableOpacity 
-              style={styles.zoomBtn}
-              onPress={() => setZoom(Math.max(0, zoom - 0.1))}
-            >
-              <Text style={styles.zoomBtnText}>−</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.zoomBtn}
-              onPress={() => setZoom(Math.min(1, zoom + 0.1))}
-            >
-              <Text style={styles.zoomBtnText}>+</Text>
-            </TouchableOpacity>
-          </View>
+          
+          <TouchableOpacity 
+            style={styles.zoomBtnLarge}
+            onPress={decrementZoom}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.zoomBtnText}>−</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Bouton de capture (côté droit) */}
@@ -293,9 +316,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: Spacing.md,
     top: 60,
-    bottom: 20,
-    width: 60,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    bottom: 30,
+    width: 65,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: BorderRadius.lg,
     padding: Spacing.sm,
     alignItems: 'center',
@@ -307,39 +330,34 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     fontWeight: '600',
   },
+  zoomValue: {
+    color: Colors.veaOk,
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+  },
   zoomSliderContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
   },
-  zoomValue: {
-    color: Colors.veaOk,
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-    marginBottom: Spacing.sm,
-  },
   zoomSlider: {
-    width: 120,
+    width: 140,
     height: 40,
     transform: [{ rotate: '-90deg' }],
   },
-  zoomButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  zoomBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  zoomBtnLarge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomBtnText: {
     color: '#FFF',
-    fontSize: FontSizes.lg,
+    fontSize: 28,
     fontWeight: '600',
+    lineHeight: 32,
   },
 
   // Capture (droite)
@@ -347,7 +365,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: Spacing.md,
     top: 60,
-    bottom: 20,
+    bottom: 30,
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
