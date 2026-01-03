@@ -32,8 +32,9 @@ export default function ParticulierVEAScreen() {
           <View style={styles.reminderContent}>
             <Text style={styles.reminderTitle}>Avant de commencer</Text>
             <Text style={styles.reminderText}>
-              <Text style={styles.reminderBold}>Robinets du compteur :</Text> LAISSEZ-LES OUVERTS{'\n'}
-              <Text style={styles.reminderBold}>Brûleurs (gazinière, chaudière) :</Text> ÉTEIGNEZ-LES
+              <Text style={styles.reminderBold}>Robinet du compteur :</Text> OUVERT{'\n'}
+              <Text style={styles.reminderBold}>Robinets des appareils :</Text> OUVERTS{'\n'}
+              <Text style={styles.reminderBold}>Appareils (chaudière, brûleurs) :</Text> ÉTEINTS
             </Text>
           </View>
         </View>
@@ -47,9 +48,9 @@ export default function ParticulierVEAScreen() {
               <Text style={styles.stepNumberText}>1</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Éteignez vos appareils</Text>
+              <Text style={styles.stepTitle}>Préparez votre installation</Text>
               <Text style={styles.stepText}>
-                Éteignez gazinière, chaudière et chauffe-eau. Gardez le robinet du compteur ouvert.
+                Ouvrez le robinet du compteur et les robinets des appareils. Éteignez chaudière et brûleurs.
               </Text>
             </View>
           </View>
@@ -61,7 +62,7 @@ export default function ParticulierVEAScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Prenez une photo</Text>
               <Text style={styles.stepText}>
-                Photographiez les chiffres de votre compteur. L'index sera relevé automatiquement.
+                Photographiez l'afficheur de votre compteur gaz.
               </Text>
             </View>
           </View>
@@ -73,7 +74,7 @@ export default function ParticulierVEAScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Attendez 3 minutes</Text>
               <Text style={styles.stepText}>
-                L'application vous guidera
+                L'application vous guidera pendant l'attente.
               </Text>
             </View>
           </View>
@@ -85,7 +86,7 @@ export default function ParticulierVEAScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Reprenez une photo</Text>
               <Text style={styles.stepText}>
-                Photographiez à nouveau votre compteur au même endroit
+                Photographiez à nouveau votre compteur au même endroit.
               </Text>
             </View>
           </View>
@@ -97,20 +98,9 @@ export default function ParticulierVEAScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Résultat instantané</Text>
               <Text style={styles.stepText}>
-                L'application compare les index et vous donne le verdict
+                L'application compare les photos et vous indique si le compteur a bougé.
               </Text>
             </View>
-          </View>
-        </View>
-
-        {/* Info OCR */}
-        <View style={styles.ocrInfoCard}>
-          <Text style={styles.ocrInfoIcon}>📊</Text>
-          <View style={styles.ocrInfoContent}>
-            <Text style={styles.ocrInfoTitle}>Relevé d'index automatique</Text>
-            <Text style={styles.ocrInfoText}>
-              L'application lit automatiquement les chiffres de votre compteur pour comparer les index avant/après.
-            </Text>
           </View>
         </View>
 
@@ -262,34 +252,6 @@ const styles = StyleSheet.create({
   stepText: {
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  ocrInfoCard: {
-    backgroundColor: Colors.primaryLight,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  ocrInfoIcon: {
-    fontSize: 28,
-    marginRight: Spacing.md,
-  },
-  ocrInfoContent: {
-    flex: 1,
-  },
-  ocrInfoTitle: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    color: Colors.primary,
-    marginBottom: 2,
-  },
-  ocrInfoText: {
-    fontSize: FontSizes.sm,
-    color: Colors.text,
     lineHeight: 20,
   },
   warningCard: {

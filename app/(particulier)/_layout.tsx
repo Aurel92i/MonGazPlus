@@ -21,13 +21,21 @@ export default function ParticulierLayout() {
           backgroundColor: Colors.surface,
           borderTopWidth: 1,
           borderTopColor: Colors.border,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 80 : 56,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 4,
+          paddingTop: 4,
+          paddingHorizontal: 0,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '500',
+          marginTop: -2,
+        },
+        tabBarIconStyle: {
+          marginBottom: -4,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 2,
         },
         headerStyle: {
           backgroundColor: Colors.particulier,
@@ -53,7 +61,7 @@ export default function ParticulierLayout() {
           tabBarLabel: 'Accueil',
           headerTitle: `🏠 ${user?.firstName || 'Mon espace'}`,
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>🏠</Text>
+            <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>🏠</Text>
           ),
         }}
       />
@@ -64,7 +72,7 @@ export default function ParticulierLayout() {
           tabBarLabel: 'Vérifier',
           headerTitle: 'Vérification gaz',
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>🔍</Text>
+            <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>🔍</Text>
           ),
         }}
       />
@@ -75,7 +83,7 @@ export default function ParticulierLayout() {
           tabBarLabel: 'Historique',
           headerTitle: 'Mes vérifications',
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>📋</Text>
+            <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>📋</Text>
           ),
         }}
       />
@@ -86,8 +94,16 @@ export default function ParticulierLayout() {
           tabBarLabel: 'Aide',
           headerTitle: 'Aide & Contact',
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>❓</Text>
+            <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>❓</Text>
           ),
+        }}
+      />
+      {/* Masquer le tab releve-index de la barre */}
+      <Tabs.Screen
+        name="releve-index"
+        options={{
+          href: null,
+          headerTitle: 'Relevé d\'index',
         }}
       />
     </Tabs>

@@ -144,13 +144,13 @@ export const VEAMessages = {
   OK: {
     title: 'VEA OK',
     subtitle: 'Installation étanche',
-    recommendation: 'Procéder à la remise en service. Ouvrir les robinets des appareils et rallumer les brûleurs.',
+    recommendation: 'Procéder à la remise en service. Rallumer les appareils (chaudière, brûleurs).',
     icon: 'check-circle',
   },
   FUITE: {
     title: 'FUITE DÉTECTÉE',
     subtitle: 'Mouvement du compteur détecté',
-    recommendation: 'COUPER LE GAZ immédiatement - Fermer le robinet du compteur - Aérer - Rechercher la fuite - Appeler un professionnel',
+    recommendation: 'COUPER LE GAZ immédiatement - Fermer le robinet du compteur - Aérer les locaux - Appeler un professionnel',
     icon: 'x-circle',
   },
 };

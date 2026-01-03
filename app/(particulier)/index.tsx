@@ -30,20 +30,20 @@ export default function ParticulierHomeScreen() {
 
         {/* Bouton principal VEA */}
         <TouchableOpacity
-          style={styles.mainButton}
+          style={styles.veaButton}
           onPress={() => router.push('/(particulier)/vea')}
           activeOpacity={0.8}
         >
-          <View style={styles.mainButtonIcon}>
-            <Text style={styles.mainButtonIconText}>🔍</Text>
+          <View style={styles.veaButtonIcon}>
+            <Text style={styles.veaButtonIconText}>🔍</Text>
           </View>
-          <View style={styles.mainButtonContent}>
-            <Text style={styles.mainButtonTitle}>Vérifier mon installation</Text>
-            <Text style={styles.mainButtonSubtitle}>
+          <View style={styles.veaButtonContent}>
+            <Text style={styles.veaButtonTitle}>Vérifier mon installation</Text>
+            <Text style={styles.veaButtonSubtitle}>
               Test d'étanchéité simple et rapide
             </Text>
           </View>
-          <Text style={styles.mainButtonArrow}>→</Text>
+          <Text style={styles.veaButtonArrow}>→</Text>
         </TouchableOpacity>
 
         {/* Info compteur (si renseigné) */}
@@ -168,43 +168,45 @@ const styles = StyleSheet.create({
     color: Colors.particulier,
     marginTop: 4,
   },
-  mainButton: {
-    backgroundColor: Colors.particulier,
+  veaButton: {
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: Spacing.lg,
-    ...Shadows.lg,
+    borderWidth: 2,
+    borderColor: '#22C55E',
+    ...Shadows.sm,
   },
-  mainButtonIcon: {
+  veaButtonIcon: {
     width: 56,
     height: 56,
     borderRadius: BorderRadius.lg,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mainButtonIconText: {
+  veaButtonIconText: {
     fontSize: 28,
   },
-  mainButtonContent: {
+  veaButtonContent: {
     flex: 1,
     marginLeft: Spacing.md,
   },
-  mainButtonTitle: {
+  veaButtonTitle: {
     fontSize: FontSizes.lg,
     fontWeight: '700',
-    color: Colors.textOnPrimary,
+    color: Colors.text,
   },
-  mainButtonSubtitle: {
+  veaButtonSubtitle: {
     fontSize: FontSizes.sm,
-    color: 'rgba(255,255,255,0.8)',
+    color: Colors.textMuted,
     marginTop: 2,
   },
-  mainButtonArrow: {
+  veaButtonArrow: {
     fontSize: FontSizes.xxl,
-    color: Colors.textOnPrimary,
+    color: '#22C55E',
   },
   releveButton: {
     backgroundColor: Colors.surface,
@@ -312,14 +314,15 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     marginBottom: Spacing.lg,
   },
   quickActionCard: {
     flex: 1,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
     alignItems: 'center',
     ...Shadows.sm,
   },
