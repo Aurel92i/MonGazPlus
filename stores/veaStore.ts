@@ -13,9 +13,19 @@ import {
   Intervention 
 } from '@/types';
 
+// Paramètres de cadrage (zoom + position)
+interface FrameSettings {
+  zoom: number;      // 1 = pas de zoom, 2 = zoom 2x, etc.
+  offsetX: number;   // Décalage horizontal en %
+  offsetY: number;   // Décalage vertical en %
+}
+
 interface VEAStore {
   // État de la capture
   captureState: CaptureState;
+  
+  // Paramètres de cadrage (définis lors de photo 1, réutilisés pour photo 2)
+  frameSettings: FrameSettings;
   
   // Lectures du compteur
   readingBefore: MeterReading | null;
@@ -36,6 +46,11 @@ interface VEAStore {
   startTimer: () => void;
   stopTimer: () => void;
   updateElapsedTime: (time: number) => void;
+  
+  // Actions de cadrage
+  setFrameSettings: (settings: FrameSettings) => void;
+  setZoom: (zoom: number) => void;
+  setOffset: (offsetX: number, offsetY: number) => void;
   
   // Actions de lecture
   setReadingBefore: (reading: MeterReading) => void;
@@ -61,9 +76,16 @@ const initialCaptureState: CaptureState = {
   timerRunning: false,
 };
 
+const initialFrameSettings: FrameSettings = {
+  zoom: 1,
+  offsetX: 0,
+  offsetY: 0,
+};
+
 export const useVEAStore = create<VEAStore>((set, get) => ({
   // État initial
   captureState: initialCaptureState,
+  frameSettings: initialFrameSettings,
   readingBefore: null,
   readingAfter: null,
   decision: null,
@@ -112,6 +134,17 @@ export const useVEAStore = create<VEAStore>((set, get) => ({
     captureState: { ...state.captureState, elapsedTime: time }
   })),
   
+  // Actions de cadrage
+  setFrameSettings: (settings) => set({ frameSettings: settings }),
+  
+  setZoom: (zoom) => set((state) => ({
+    frameSettings: { ...state.frameSettings, zoom: Math.max(1, Math.min(5, zoom)) }
+  })),
+  
+  setOffset: (offsetX, offsetY) => set((state) => ({
+    frameSettings: { ...state.frameSettings, offsetX, offsetY }
+  })),
+  
   // Actions de lecture
   setReadingBefore: (reading) => set({ readingBefore: reading }),
   
@@ -130,6 +163,7 @@ export const useVEAStore = create<VEAStore>((set, get) => ({
   // Reset
   resetSession: () => set({
     captureState: initialCaptureState,
+    frameSettings: initialFrameSettings,
     readingBefore: null,
     readingAfter: null,
     decision: null,
@@ -137,6 +171,7 @@ export const useVEAStore = create<VEAStore>((set, get) => ({
   
   resetAll: () => set({
     captureState: initialCaptureState,
+    frameSettings: initialFrameSettings,
     readingBefore: null,
     readingAfter: null,
     decision: null,

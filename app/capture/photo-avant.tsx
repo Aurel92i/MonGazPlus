@@ -1,37 +1,43 @@
 /**
  * Écran de capture Photo AVANT
- * Avec caméra réelle, stabilisation et cadre d'alignement
+ * 
+ * Mode paysage avec :
+ * - Zoom ajustable (slider)
+ * - Cadre aux 3/4 supérieurs
+ * - Sauvegarde des paramètres de cadrage pour photo 2
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { CameraView } from 'expo-camera';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import Slider from '@react-native-community/slider';
 import { Colors, Spacing, FontSizes, BorderRadius } from '@/constants/theme';
-import { useCamera, useStabilization } from '@/hooks';
-import { StabilizationBar, AlignmentFrame } from '@/components/camera';
+import { useCamera } from '@/hooks';
+import { BorderFrame } from '@/components/camera';
 import { useVEAStore } from '@/stores/veaStore';
 
 export default function PhotoAvantScreen() {
   const router = useRouter();
   const veaStore = useVEAStore();
-  
-  // Hooks personnalisés
   const camera = useCamera();
-  const stabilization = useStabilization({
-    threshold: 5, // Un peu plus permissif pour l'UX
-    minStableDuration: 300,
-  });
-
-  const [showInstructions, setShowInstructions] = useState(true);
-
-  // Démarrer les capteurs au montage
+  
+  const [showTips, setShowTips] = useState(true);
+  const [zoom, setZoom] = useState(0); // 0 = pas de zoom, 1 = max zoom
+  
+  // Forcer le mode paysage au montage
   useEffect(() => {
-    stabilization.startSensors();
-    
+    const lockLandscape = async () => {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT
+      );
+    };
+    lockLandscape();
+
     return () => {
-      stabilization.stopSensors();
+      ScreenOrientation.unlockAsync();
     };
   }, []);
 
@@ -42,35 +48,22 @@ export default function PhotoAvantScreen() {
     }
   }, [camera.hasPermission]);
 
-  // Masquer les instructions après 3 secondes
+  // Masquer les conseils après 4 secondes
   useEffect(() => {
     const timer = setTimeout(() => {
-      setShowInstructions(false);
-    }, 3000);
+      setShowTips(false);
+    }, 4000);
     return () => clearTimeout(timer);
   }, []);
 
   const handleCapture = async () => {
-    if (!stabilization.isStable) {
-      Alert.alert(
-        'Téléphone instable',
-        'Stabilisez votre téléphone avant de capturer.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    const photo = await camera.takePhoto({
-      pitch: stabilization.pitch,
-      roll: stabilization.roll,
-      yaw: stabilization.yaw,
-    });
+    // Sauvegarder le niveau de zoom pour la photo 2
+    veaStore.setZoom(1 + zoom * 4); // zoom 1x à 5x
+    
+    const photo = await camera.takePhoto();
 
     if (photo) {
-      // Sauvegarder dans le store
       veaStore.setPhotoBefore(photo);
-      
-      // Naviguer vers photo après
       router.replace('/capture/photo-apres');
     } else {
       Alert.alert('Erreur', 'Échec de la capture. Réessayez.');
@@ -79,13 +72,15 @@ export default function PhotoAvantScreen() {
 
   const handleClose = () => {
     veaStore.resetSession();
+    ScreenOrientation.unlockAsync();
     router.back();
   };
 
   // Écran de demande de permission
   if (camera.hasPermission === false) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <StatusBar hidden />
         <View style={styles.permissionContainer}>
           <Text style={styles.permissionIcon}>📷</Text>
           <Text style={styles.permissionTitle}>Accès caméra requis</Text>
@@ -98,32 +93,19 @@ export default function PhotoAvantScreen() {
           >
             <Text style={styles.permissionButtonText}>Autoriser l'accès</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleClose}
-          >
+          <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
             <Text style={styles.cancelButtonText}>Annuler</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>✕</Text>
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.stepIndicator}>Étape 1/2</Text>
-          <Text style={styles.title}>Photo AVANT</Text>
-        </View>
-        <View style={styles.placeholder} />
-      </View>
-
-      {/* Zone caméra */}
+    <View style={styles.container}>
+      <StatusBar hidden />
+      
+      {/* Zone caméra plein écran */}
       <View style={styles.cameraContainer}>
         {camera.hasPermission && (
           <CameraView
@@ -131,70 +113,90 @@ export default function PhotoAvantScreen() {
             style={styles.camera}
             facing={camera.cameraType}
             onCameraReady={camera.onCameraReady}
+            zoom={zoom}
           />
         )}
 
         {/* Cadre d'alignement */}
-        <View style={styles.frameOverlay}>
-          <AlignmentFrame
-            isStable={stabilization.isStable}
-            isAligned={false}
-            label="Cadrez les chiffres rouges"
-          />
+        <BorderFrame
+          status="aligned"
+          instructions="Cadrez le compteur avec le zoom"
+        />
+
+        {/* Header overlay */}
+        <View style={styles.headerOverlay}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <Text style={styles.stepText}>PHOTO AVANT</Text>
+            <Text style={styles.stepNumber}>Étape 1/2</Text>
+          </View>
+          <View style={styles.placeholder} />
         </View>
 
-        {/* Instructions initiales */}
-        {showInstructions && (
-          <View style={styles.instructionsOverlay}>
-            <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsIcon}>📸</Text>
-              <Text style={styles.instructionsTitle}>Cadrez le compteur</Text>
-              <Text style={styles.instructionsText}>
-                Placez les 3 chiffres rouges (décimales) dans le cadre.
-                Stabilisez le téléphone.
+        {/* Conseils initiaux */}
+        {showTips && (
+          <View style={styles.tipsOverlay}>
+            <View style={styles.tipsCard}>
+              <Text style={styles.tipsTitle}>💡 Cadrez le compteur</Text>
+              <Text style={styles.tipsText}>
+                Utilisez le zoom pour ajuster{'\n'}
+                Alignez le compteur dans le cadre vert
               </Text>
             </View>
           </View>
         )}
-      </View>
 
-      {/* Barre de stabilisation */}
-      <View style={styles.stabilizationContainer}>
-        <StabilizationBar
-          score={stabilization.stabilityScore}
-          isStable={stabilization.isStable}
-          pitch={stabilization.pitch}
-          roll={stabilization.roll}
-          message={stabilization.message}
-        />
-      </View>
+        {/* Contrôle de zoom (côté gauche) */}
+        <View style={styles.zoomControlContainer}>
+          <Text style={styles.zoomLabel}>🔍 Zoom</Text>
+          <View style={styles.zoomSliderContainer}>
+            <Text style={styles.zoomValue}>{Math.round((1 + zoom * 4) * 10) / 10}x</Text>
+            <Slider
+              style={styles.zoomSlider}
+              minimumValue={0}
+              maximumValue={1}
+              value={zoom}
+              onValueChange={setZoom}
+              minimumTrackTintColor={Colors.veaOk}
+              maximumTrackTintColor="rgba(255,255,255,0.3)"
+              thumbTintColor={Colors.veaOk}
+            />
+          </View>
+          <View style={styles.zoomButtons}>
+            <TouchableOpacity 
+              style={styles.zoomBtn}
+              onPress={() => setZoom(Math.max(0, zoom - 0.1))}
+            >
+              <Text style={styles.zoomBtnText}>−</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.zoomBtn}
+              onPress={() => setZoom(Math.min(1, zoom + 0.1))}
+            >
+              <Text style={styles.zoomBtnText}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      {/* Bouton de capture */}
-      <View style={styles.captureContainer}>
-        <TouchableOpacity
-          style={[
-            styles.captureButton,
-            stabilization.isStable && styles.captureButtonReady,
-            camera.isCapturing && styles.captureButtonDisabled,
-          ]}
-          onPress={handleCapture}
-          disabled={camera.isCapturing}
-          activeOpacity={0.8}
-        >
-          <View style={[
-            styles.captureButtonInner,
-            stabilization.isStable && styles.captureButtonInnerReady,
-          ]} />
-        </TouchableOpacity>
-        <Text style={styles.captureHint}>
-          {camera.isCapturing 
-            ? 'Capture en cours...' 
-            : stabilization.isStable 
-              ? 'Appuyez pour capturer' 
-              : 'Stabilisez le téléphone'}
-        </Text>
+        {/* Bouton de capture (côté droit) */}
+        <View style={styles.captureZone}>
+          <TouchableOpacity
+            style={[
+              styles.captureButton,
+              camera.isCapturing && styles.captureButtonDisabled,
+            ]}
+            onPress={handleCapture}
+            disabled={camera.isCapturing || !camera.isReady}
+            activeOpacity={0.8}
+          >
+            <View style={styles.captureButtonInner} />
+          </TouchableOpacity>
+          <Text style={styles.captureHint}>Capturer</Text>
+        </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -203,125 +205,181 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  header: {
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  
+  // Header
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    zIndex: 20,
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeButtonText: {
     color: '#FFF',
-    fontSize: FontSizes.xl,
+    fontSize: FontSizes.lg,
   },
-  headerCenter: {
+  headerInfo: {
     alignItems: 'center',
   },
-  stepIndicator: {
+  stepText: {
+    color: '#FFF',
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+  },
+  stepNumber: {
     color: Colors.primary,
     fontSize: FontSizes.xs,
     fontWeight: '600',
   },
-  title: {
-    color: '#FFF',
-    fontSize: FontSizes.lg,
-    fontWeight: '600',
-  },
   placeholder: {
-    width: 40,
+    width: 36,
   },
-  cameraContainer: {
-    flex: 1,
-    margin: Spacing.md,
+
+  // Tips
+  tipsOverlay: {
+    position: 'absolute',
+    bottom: '25%',
+    left: 80,
+    right: 100,
+    alignItems: 'center',
+    zIndex: 15,
+  },
+  tipsCard: {
+    backgroundColor: 'rgba(0,0,0,0.85)',
     borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-    position: 'relative',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.veaOk,
   },
-  camera: {
-    flex: 1,
-  },
-  frameOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionsOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: Spacing.xl,
-  },
-  instructionsCard: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginHorizontal: Spacing.lg,
-    alignItems: 'center',
-    maxWidth: 300,
-  },
-  instructionsIcon: {
-    fontSize: 32,
-    marginBottom: Spacing.sm,
-  },
-  instructionsTitle: {
-    color: '#FFF',
+  tipsTitle: {
+    color: Colors.veaOk,
     fontSize: FontSizes.md,
-    fontWeight: '600',
+    fontWeight: '700',
+    textAlign: 'center',
     marginBottom: Spacing.xs,
   },
-  instructionsText: {
-    color: '#AAA',
+  tipsText: {
+    color: '#FFF',
     fontSize: FontSizes.sm,
     textAlign: 'center',
     lineHeight: 20,
   },
-  stabilizationContainer: {
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
-  },
-  captureContainer: {
+
+  // Zoom controls (gauche)
+  zoomControlContainer: {
+    position: 'absolute',
+    left: Spacing.md,
+    top: 60,
+    bottom: 20,
+    width: 60,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.sm,
     alignItems: 'center',
-    paddingBottom: Spacing.xl,
+    justifyContent: 'space-between',
+    zIndex: 25,
+  },
+  zoomLabel: {
+    color: '#FFF',
+    fontSize: FontSizes.xs,
+    fontWeight: '600',
+  },
+  zoomSliderContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  zoomValue: {
+    color: Colors.veaOk,
+    fontSize: FontSizes.md,
+    fontWeight: '700',
+    marginBottom: Spacing.sm,
+  },
+  zoomSlider: {
+    width: 120,
+    height: 40,
+    transform: [{ rotate: '-90deg' }],
+  },
+  zoomButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  zoomBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomBtnText: {
+    color: '#FFF',
+    fontSize: FontSizes.lg,
+    fontWeight: '600',
+  },
+
+  // Capture (droite)
+  captureZone: {
+    position: 'absolute',
+    right: Spacing.md,
+    top: 60,
+    bottom: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    zIndex: 25,
   },
   captureButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(34, 197, 94, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
-    borderColor: '#FFF',
-  },
-  captureButtonReady: {
     borderColor: Colors.veaOk,
-    backgroundColor: 'rgba(34, 197, 94, 0.3)',
   },
   captureButtonDisabled: {
     opacity: 0.5,
   },
   captureButtonInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFF',
-  },
-  captureButtonInnerReady: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: Colors.veaOk,
   },
   captureHint: {
-    color: '#888',
-    fontSize: FontSizes.sm,
-    marginTop: Spacing.sm,
+    color: '#FFF',
+    fontSize: FontSizes.xs,
+    marginTop: Spacing.xs,
+    fontWeight: '600',
   },
-  // Permission screen
+
+  // Permission
   permissionContainer: {
     flex: 1,
     justifyContent: 'center',

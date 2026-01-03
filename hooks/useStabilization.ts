@@ -1,6 +1,9 @@
 /**
  * Hook de stabilisation pour MonGaz+
  * Utilise l'accéléromètre et le gyroscope pour détecter la stabilité du téléphone
+ * 
+ * Position de référence : téléphone tenu VERTICALEMENT face au compteur
+ * (comme pour prendre une photo d'un objet devant soi)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -8,7 +11,7 @@ import { Accelerometer, Gyroscope } from 'expo-sensors';
 
 interface StabilityState {
   isStable: boolean;
-  pitch: number;  // Inclinaison avant/arrière
+  pitch: number;  // Inclinaison avant/arrière (0° = vertical face au compteur)
   roll: number;   // Inclinaison gauche/droite
   yaw: number;    // Rotation
   stabilityScore: number; // 0-100
@@ -16,7 +19,7 @@ interface StabilityState {
 }
 
 interface UseStabilizationOptions {
-  /** Seuil de stabilité en degrés (défaut: 3) */
+  /** Seuil de stabilité en degrés (défaut: 8) */
   threshold?: number;
   /** Intervalle de mise à jour en ms (défaut: 100) */
   updateInterval?: number;
@@ -25,7 +28,7 @@ interface UseStabilizationOptions {
 }
 
 const DEFAULT_OPTIONS: UseStabilizationOptions = {
-  threshold: 3,
+  threshold: 8, // Plus permissif pour une meilleure UX
   updateInterval: 100,
   minStableDuration: 500,
 };
@@ -42,36 +45,69 @@ export function useStabilization(options: UseStabilizationOptions = {}) {
     roll: 0,
     yaw: 0,
     stabilityScore: 0,
-    message: 'Stabilisez le téléphone...',
+    message: 'Tenez le téléphone face au compteur',
   });
 
   const [isActive, setIsActive] = useState(false);
   const stableStartTime = useRef<number | null>(null);
-  const lastAccelData = useRef({ x: 0, y: 0, z: 0 });
   const lastGyroData = useRef({ x: 0, y: 0, z: 0 });
 
-  // Calculer les angles à partir de l'accéléromètre
+  /**
+   * Calcule les angles d'orientation du téléphone
+   * 
+   * Convention Expo Sensors (valeurs en G, ~1 = gravité) :
+   * - x : droite du téléphone
+   * - y : haut du téléphone  
+   * - z : sortant de l'écran (vers l'utilisateur)
+   * 
+   * Position idéale (téléphone vertical, écran face à soi) :
+   * - x ≈ 0, y ≈ -1, z ≈ 0
+   */
   const calculateAngles = useCallback((accel: { x: number; y: number; z: number }) => {
-    // Convertir en degrés
-    const pitch = Math.atan2(accel.y, Math.sqrt(accel.x ** 2 + accel.z ** 2)) * (180 / Math.PI);
-    const roll = Math.atan2(-accel.x, accel.z) * (180 / Math.PI);
+    const { x, y, z } = accel;
+    
+    // Magnitude totale (devrait être ~1 en conditions normales)
+    const magnitude = Math.sqrt(x * x + y * y + z * z);
+    
+    // Éviter division par zéro
+    if (magnitude < 0.01) {
+      return { pitch: 0, roll: 0 };
+    }
+
+    // Normaliser
+    const nx = x / magnitude;
+    const ny = y / magnitude;
+    const nz = z / magnitude;
+
+    // PITCH : angle par rapport à la verticale (avant/arrière)
+    // En position idéale (téléphone vertical) : ny ≈ -1, nz ≈ 0 → pitch = 0°
+    // Si téléphone penché en arrière (écran vers le plafond) : ny diminue, nz devient négatif
+    // Si téléphone penché en avant (écran vers le sol) : ny diminue, nz devient positif
+    const pitch = Math.atan2(nz, -ny) * (180 / Math.PI);
+
+    // ROLL : inclinaison gauche/droite
+    // En position idéale : nx ≈ 0 → roll = 0°
+    const roll = Math.atan2(nx, -ny) * (180 / Math.PI);
+
     return { pitch, roll };
   }, []);
 
-  // Calculer le score de stabilité
+  // Calculer le score de stabilité (0-100)
   const calculateStabilityScore = useCallback((
     pitch: number,
     roll: number,
     gyro: { x: number; y: number; z: number }
   ) => {
-    // Score basé sur l'inclinaison (0-50 points)
-    const maxAngle = 45; // Angle max considéré
-    const angleScore = Math.max(0, 50 - (Math.abs(pitch) + Math.abs(roll)) / maxAngle * 50);
+    // Score basé sur l'angle (0-60 points)
+    // Plus on est proche de 0°, plus le score est élevé
+    const maxAngleForScore = 30;
+    const angleDeviation = Math.abs(pitch) + Math.abs(roll);
+    const angleScore = Math.max(0, 60 * (1 - angleDeviation / (maxAngleForScore * 2)));
 
-    // Score basé sur le mouvement du gyroscope (0-50 points)
+    // Score basé sur l'absence de mouvement (gyroscope) (0-40 points)
     const gyroMagnitude = Math.sqrt(gyro.x ** 2 + gyro.y ** 2 + gyro.z ** 2);
-    const maxGyro = 2; // Mouvement max considéré
-    const gyroScore = Math.max(0, 50 - (gyroMagnitude / maxGyro) * 50);
+    const maxGyroForScore = 0.5;
+    const gyroScore = Math.max(0, 40 * (1 - gyroMagnitude / maxGyroForScore));
 
     return Math.round(angleScore + gyroScore);
   }, []);
@@ -82,72 +118,91 @@ export function useStabilization(options: UseStabilizationOptions = {}) {
     roll: number,
     gyro: { x: number; y: number; z: number }
   ) => {
-    const isPitchStable = Math.abs(pitch) < threshold!;
-    const isRollStable = Math.abs(roll) < threshold!;
+    const isPitchOk = Math.abs(pitch) < threshold!;
+    const isRollOk = Math.abs(roll) < threshold!;
+    
+    // Vérifier aussi que le téléphone ne bouge pas trop
     const gyroMagnitude = Math.sqrt(gyro.x ** 2 + gyro.y ** 2 + gyro.z ** 2);
-    const isGyroStable = gyroMagnitude < 0.1;
+    const isNotMoving = gyroMagnitude < 0.15;
 
-    return isPitchStable && isRollStable && isGyroStable;
+    return isPitchOk && isRollOk && isNotMoving;
   }, [threshold]);
 
-  // Obtenir le message approprié
-  const getMessage = useCallback((pitch: number, roll: number, isCurrentlyStable: boolean) => {
+  // Générer un message d'aide pour l'utilisateur
+  const getMessage = useCallback((
+    pitch: number,
+    roll: number,
+    isCurrentlyStable: boolean,
+    gyro: { x: number; y: number; z: number }
+  ) => {
     if (isCurrentlyStable) {
       return '✓ Téléphone stable !';
     }
 
-    const messages: string[] = [];
-    
-    if (Math.abs(pitch) >= threshold!) {
-      if (pitch > 0) {
-        messages.push('Inclinez vers le bas');
-      } else {
-        messages.push('Inclinez vers le haut');
-      }
-    }
-    
-    if (Math.abs(roll) >= threshold!) {
-      if (roll > 0) {
-        messages.push('Inclinez vers la gauche');
-      } else {
-        messages.push('Inclinez vers la droite');
-      }
+    // Vérifier si le téléphone bouge trop
+    const gyroMagnitude = Math.sqrt(gyro.x ** 2 + gyro.y ** 2 + gyro.z ** 2);
+    if (gyroMagnitude > 0.3) {
+      return '⟳ Arrêtez de bouger';
     }
 
-    return messages.length > 0 ? messages.join(' • ') : 'Stabilisez le téléphone...';
+    const instructions: string[] = [];
+
+    // Pitch (avant/arrière)
+    if (pitch > threshold!) {
+      instructions.push('Relevez le bas du téléphone');
+    } else if (pitch < -threshold!) {
+      instructions.push('Abaissez le bas du téléphone');
+    }
+
+    // Roll (gauche/droite)  
+    if (roll > threshold!) {
+      instructions.push('Inclinez à gauche');
+    } else if (roll < -threshold!) {
+      instructions.push('Inclinez à droite');
+    }
+
+    if (instructions.length > 0) {
+      return instructions.join(' • ');
+    }
+
+    return 'Tenez le téléphone droit face au compteur';
   }, [threshold]);
 
   // Démarrer les capteurs
   const startSensors = useCallback(async () => {
     try {
-      // Vérifier la disponibilité
       const [accelAvailable, gyroAvailable] = await Promise.all([
         Accelerometer.isAvailableAsync(),
         Gyroscope.isAvailableAsync(),
       ]);
 
       if (!accelAvailable) {
-        setState(prev => ({ ...prev, message: 'Accéléromètre non disponible' }));
+        setState(prev => ({ ...prev, message: '⚠️ Accéléromètre non disponible' }));
         return;
       }
 
-      // Configurer l'intervalle
+      // Configurer l'intervalle de mise à jour
       Accelerometer.setUpdateInterval(updateInterval!);
       if (gyroAvailable) {
         Gyroscope.setUpdateInterval(updateInterval!);
       }
 
+      // S'abonner au gyroscope (si disponible)
+      if (gyroAvailable) {
+        Gyroscope.addListener((data) => {
+          lastGyroData.current = data;
+        });
+      }
+
       // S'abonner à l'accéléromètre
       Accelerometer.addListener((data) => {
-        lastAccelData.current = data;
-        
         const { pitch, roll } = calculateAngles(data);
         const gyro = lastGyroData.current;
         const isCurrentlyStable = checkStability(pitch, roll, gyro);
         const score = calculateStabilityScore(pitch, roll, gyro);
-        const message = getMessage(pitch, roll, isCurrentlyStable);
+        const message = getMessage(pitch, roll, isCurrentlyStable, gyro);
 
-        // Gérer le timing de stabilité
+        // Gestion du timing de stabilité
         const now = Date.now();
         if (isCurrentlyStable) {
           if (!stableStartTime.current) {
@@ -157,31 +212,25 @@ export function useStabilization(options: UseStabilizationOptions = {}) {
           stableStartTime.current = null;
         }
 
-        const hasBeenStableLongEnough = 
-          stableStartTime.current !== null && 
+        // Stable seulement si maintenu assez longtemps
+        const hasBeenStableLongEnough =
+          stableStartTime.current !== null &&
           (now - stableStartTime.current) >= minStableDuration!;
 
         setState({
           isStable: hasBeenStableLongEnough,
           pitch: Math.round(pitch * 10) / 10,
           roll: Math.round(roll * 10) / 10,
-          yaw: 0, // Le yaw nécessite un magnétomètre
+          yaw: 0,
           stabilityScore: score,
           message,
         });
       });
 
-      // S'abonner au gyroscope si disponible
-      if (gyroAvailable) {
-        Gyroscope.addListener((data) => {
-          lastGyroData.current = data;
-        });
-      }
-
       setIsActive(true);
     } catch (error) {
-      console.error('Erreur lors du démarrage des capteurs:', error);
-      setState(prev => ({ ...prev, message: 'Erreur capteurs' }));
+      console.error('Erreur capteurs:', error);
+      setState(prev => ({ ...prev, message: '⚠️ Erreur capteurs' }));
     }
   }, [updateInterval, minStableDuration, calculateAngles, checkStability, calculateStabilityScore, getMessage]);
 
@@ -193,7 +242,7 @@ export function useStabilization(options: UseStabilizationOptions = {}) {
     stableStartTime.current = null;
   }, []);
 
-  // Nettoyer à la destruction
+  // Nettoyer au démontage
   useEffect(() => {
     return () => {
       stopSensors();

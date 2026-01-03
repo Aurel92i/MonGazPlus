@@ -1,6 +1,6 @@
 /**
- * Cadre d'alignement pour la zone décimale
- * Change de couleur selon l'état de stabilité et d'alignement
+ * Cadre d'alignement pour le rectangle de comptage
+ * Adapté pour englober tout l'afficheur du compteur gaz
  */
 
 import React from 'react';
@@ -10,7 +10,7 @@ import { Colors, FontSizes, Spacing } from '@/constants/theme';
 interface AlignmentFrameProps {
   /** Le téléphone est-il stable ? */
   isStable: boolean;
-  /** L'image est-elle alignée ? (pour le futur) */
+  /** L'image est-elle bien cadrée ? */
   isAligned?: boolean;
   /** Afficher le label */
   showLabel?: boolean;
@@ -22,36 +22,47 @@ export function AlignmentFrame({
   isStable,
   isAligned = false,
   showLabel = true,
-  label = 'Zone décimale',
+  label = 'Cadrez l\'afficheur',
 }: AlignmentFrameProps) {
-  // Déterminer la couleur du cadre
+  // Couleur du cadre selon l'état
   const getFrameColor = () => {
-    if (isStable && isAligned) return Colors.frameAligned;
-    if (isStable) return Colors.frameAlmostAligned;
-    return Colors.frameNotAligned;
+    if (isStable && isAligned) return Colors.veaOk;      // Vert
+    if (isStable) return Colors.primary;                  // Orange
+    return Colors.veaFuite;                               // Rouge
   };
 
   const frameColor = getFrameColor();
 
   return (
     <View style={styles.container}>
-      {/* Cadre principal */}
+      {/* Cadre principal - format horizontal pour l'afficheur */}
       <View style={[styles.frame, { borderColor: frameColor }]}>
-        {/* Coins */}
-        <View style={[styles.corner, styles.cornerTopLeft, { borderColor: frameColor }]} />
-        <View style={[styles.corner, styles.cornerTopRight, { borderColor: frameColor }]} />
-        <View style={[styles.corner, styles.cornerBottomLeft, { borderColor: frameColor }]} />
-        <View style={[styles.corner, styles.cornerBottomRight, { borderColor: frameColor }]} />
+        {/* Coins renforcés */}
+        <View style={[styles.corner, styles.topLeft, { borderColor: frameColor }]} />
+        <View style={[styles.corner, styles.topRight, { borderColor: frameColor }]} />
+        <View style={[styles.corner, styles.bottomLeft, { borderColor: frameColor }]} />
+        <View style={[styles.corner, styles.bottomRight, { borderColor: frameColor }]} />
 
-        {/* Lignes de guidage horizontales */}
-        <View style={[styles.guideLine, styles.guideLineTop, { backgroundColor: frameColor }]} />
-        <View style={[styles.guideLine, styles.guideLineBottom, { backgroundColor: frameColor }]} />
-
-        {/* Marqueurs pour les 3 chiffres décimaux */}
-        <View style={styles.digitMarkers}>
-          <View style={[styles.digitMarker, { borderColor: frameColor }]} />
-          <View style={[styles.digitMarker, { borderColor: frameColor }]} />
-          <View style={[styles.digitMarker, { borderColor: frameColor }]} />
+        {/* Zone centrale avec guide pour les chiffres */}
+        <View style={styles.innerGuide}>
+          {/* Zones indicatives pour les chiffres */}
+          <View style={styles.digitZones}>
+            {[...Array(8)].map((_, i) => (
+              <View 
+                key={i} 
+                style={[
+                  styles.digitBox,
+                  i >= 5 && styles.digitBoxRed, // Les 3 derniers (décimales)
+                  { borderColor: i >= 5 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(255, 255, 255, 0.3)' }
+                ]} 
+              />
+            ))}
+          </View>
+          
+          {/* Séparateur décimal */}
+          <View style={styles.decimalSeparator}>
+            <Text style={styles.decimalDot}>•</Text>
+          </View>
         </View>
       </View>
 
@@ -64,23 +75,20 @@ export function AlignmentFrame({
 
       {/* Indicateur d'état */}
       <View style={styles.statusContainer}>
-        {isStable ? (
-          <Text style={[styles.statusText, { color: frameColor }]}>
-            {isAligned ? '✓ Aligné' : '○ Stabilisé'}
-          </Text>
-        ) : (
-          <Text style={[styles.statusText, { color: frameColor }]}>
-            ◌ Stabilisation...
-          </Text>
-        )}
+        <Text style={[styles.statusText, { color: frameColor }]}>
+          {isStable 
+            ? (isAligned ? '✓ Prêt à capturer' : '○ Stabilisé - Ajustez le cadrage')
+            : '◌ Stabilisez le téléphone'
+          }
+        </Text>
       </View>
     </View>
   );
 }
 
 const { width: screenWidth } = Dimensions.get('window');
-const frameWidth = screenWidth * 0.75;
-const frameHeight = frameWidth * 0.35; // Ratio pour la zone décimale
+const frameWidth = screenWidth * 0.85;
+const frameHeight = frameWidth * 0.25; // Ratio pour l'afficheur complet
 
 const styles = StyleSheet.create({
   container: {
@@ -92,84 +100,87 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 8,
     position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   corner: {
     position: 'absolute',
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderWidth: 4,
   },
-  cornerTopLeft: {
+  topLeft: {
     top: -2,
     left: -2,
     borderRightWidth: 0,
     borderBottomWidth: 0,
     borderTopLeftRadius: 8,
   },
-  cornerTopRight: {
+  topRight: {
     top: -2,
     right: -2,
     borderLeftWidth: 0,
     borderBottomWidth: 0,
     borderTopRightRadius: 8,
   },
-  cornerBottomLeft: {
+  bottomLeft: {
     bottom: -2,
     left: -2,
     borderRightWidth: 0,
     borderTopWidth: 0,
     borderBottomLeftRadius: 8,
   },
-  cornerBottomRight: {
+  bottomRight: {
     bottom: -2,
     right: -2,
     borderLeftWidth: 0,
     borderTopWidth: 0,
     borderBottomRightRadius: 8,
   },
-  guideLine: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    height: 1,
-    opacity: 0.5,
-  },
-  guideLineTop: {
-    top: '30%',
-  },
-  guideLineBottom: {
-    bottom: '30%',
-  },
-  digitMarkers: {
-    position: 'absolute',
-    top: '25%',
-    bottom: '25%',
-    left: '10%',
-    right: '10%',
+  innerGuide: {
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
     alignItems: 'center',
+    justifyContent: 'center',
+    width: '90%',
+    height: '70%',
   },
-  digitMarker: {
-    width: frameWidth * 0.18,
-    height: '100%',
+  digitZones: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  digitBox: {
+    width: (frameWidth * 0.85) / 10,
+    height: frameHeight * 0.5,
     borderWidth: 1,
-    borderRadius: 4,
     borderStyle: 'dashed',
-    opacity: 0.5,
+    borderRadius: 3,
+  },
+  digitBoxRed: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  decimalSeparator: {
+    position: 'absolute',
+    right: '37%',
+    top: '50%',
+    transform: [{ translateY: -8 }],
+  },
+  decimalDot: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   labelContainer: {
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    borderRadius: 12,
+    borderRadius: 16,
   },
   labelText: {
     color: '#FFF',
     fontSize: FontSizes.xs,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   statusContainer: {
     marginTop: Spacing.xs,
