@@ -13,11 +13,12 @@ import {
   Intervention 
 } from '@/types';
 
-// Paramètres de cadrage (zoom + position)
+// Paramètres de cadrage (zoom + position + flash)
 interface FrameSettings {
   zoom: number;      // 1 = pas de zoom, 2 = zoom 2x, etc.
   offsetX: number;   // Décalage horizontal en %
   offsetY: number;   // Décalage vertical en %
+  flashEnabled: boolean; // État du flash (conservé entre les photos)
 }
 
 interface VEAStore {
@@ -51,6 +52,7 @@ interface VEAStore {
   setFrameSettings: (settings: FrameSettings) => void;
   setZoom: (zoom: number) => void;
   setOffset: (offsetX: number, offsetY: number) => void;
+  setFlash: (enabled: boolean) => void;
   
   // Actions de lecture
   setReadingBefore: (reading: MeterReading) => void;
@@ -80,6 +82,7 @@ const initialFrameSettings: FrameSettings = {
   zoom: 1,
   offsetX: 0,
   offsetY: 0,
+  flashEnabled: false,
 };
 
 export const useVEAStore = create<VEAStore>((set, get) => ({
@@ -143,6 +146,10 @@ export const useVEAStore = create<VEAStore>((set, get) => ({
   
   setOffset: (offsetX, offsetY) => set((state) => ({
     frameSettings: { ...state.frameSettings, offsetX, offsetY }
+  })),
+  
+  setFlash: (enabled) => set((state) => ({
+    frameSettings: { ...state.frameSettings, flashEnabled: enabled }
   })),
   
   // Actions de lecture

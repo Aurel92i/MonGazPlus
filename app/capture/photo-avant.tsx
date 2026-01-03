@@ -1,11 +1,11 @@
 /**
- * Écran de capture Photo AVANT
+ * Écran de capture Première Photo
  * 
  * Interface épurée avec :
  * - Header compact
- * - Zoom rehaussé à gauche
- * - Cadre ⊓ avec arcs de coin
- * - Bouton capture proéminent
+ * - Zoom rehaussé à gauche (+ en haut, - en bas)
+ * - Cadre ⊓ avec rayures de coin
+ * - Bouton flash + capture proéminent
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -22,10 +22,14 @@ import { useVEAStore } from '@/stores/veaStore';
 export default function PhotoAvantScreen() {
   const router = useRouter();
   const veaStore = useVEAStore();
+  const { frameSettings } = veaStore;
   const camera = useCamera();
   
   const [zoom, setZoom] = useState(0);
   const [displayZoom, setDisplayZoom] = useState(1);
+
+  // Flash depuis le store (persisté entre les photos)
+  const flashEnabled = frameSettings.flashEnabled;
 
   // ═══════════════════════════════════════════════════════════
   // EFFETS
@@ -60,6 +64,10 @@ export default function PhotoAvantScreen() {
     setZoom(newZoom);
     setDisplayZoom(1 + newZoom * 4);
   }, [zoom]);
+
+  const toggleFlash = useCallback(() => {
+    veaStore.setFlash(!flashEnabled);
+  }, [flashEnabled]);
 
   const handleCapture = async () => {
     veaStore.setZoom(displayZoom);
@@ -121,6 +129,7 @@ export default function PhotoAvantScreen() {
             facing={camera.cameraType}
             onCameraReady={camera.onCameraReady}
             zoom={zoom}
+            enableTorch={flashEnabled}
           />
         )}
 
@@ -134,19 +143,19 @@ export default function PhotoAvantScreen() {
         />
       </View>
 
-      {/* HEADER COMPACT */}
+      {/* HEADER - Plus transparent */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
           <Text style={styles.closeBtnText}>✕</Text>
         </TouchableOpacity>
         
         <View style={styles.titleContainer}>
-          <Text style={styles.titleText}>PHOTO AVANT</Text>
+          <Text style={styles.titleText}>Première photo</Text>
           <Text style={styles.stepText}>Étape 1/2</Text>
         </View>
       </View>
 
-      {/* CONTRÔLES ZOOM - REHAUSSÉ */}
+      {/* CONTRÔLES ZOOM - REHAUSSÉ (+ en haut, - en bas) */}
       <View style={styles.zoomControls}>
         <Text style={styles.zoomIcon}>🔍</Text>
         
@@ -174,13 +183,25 @@ export default function PhotoAvantScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* FOOTER COMPACT */}
+      {/* FOOTER - Plus transparent */}
       <View style={styles.footer}>
         <Text style={styles.footerHint}>
           Alignez le cadre vert aux bords du compteur
         </Text>
         
-        {/* Bouton capture PROÉMINENT */}
+        {/* Bouton Flash */}
+        <TouchableOpacity
+          style={[styles.flashBtn, flashEnabled && styles.flashBtnActive]}
+          onPress={toggleFlash}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.flashIcon}>{flashEnabled ? '⚡' : '🔦'}</Text>
+          <Text style={[styles.flashText, flashEnabled && styles.flashTextActive]}>
+            {flashEnabled ? 'ON' : 'OFF'}
+          </Text>
+        </TouchableOpacity>
+        
+        {/* Bouton capture */}
         <TouchableOpacity
           style={[styles.captureBtn, camera.isCapturing && styles.captureBtnDisabled]}
           onPress={handleCapture}
@@ -215,31 +236,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // HEADER COMPACT
+  // HEADER - Plus transparent
   header: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 50, // Réduit de 70 à 50
+    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
     zIndex: 100,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeBtnText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
   },
   titleContainer: {
@@ -247,12 +268,12 @@ const styles = StyleSheet.create({
   },
   titleText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
   },
   stepText: {
     color: '#F97316',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
 
@@ -260,7 +281,7 @@ const styles = StyleSheet.create({
   zoomControls: {
     position: 'absolute',
     left: 16,
-    top: 70, // Rehaussé : juste sous le header
+    top: 70,
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: 14,
@@ -303,7 +324,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-90deg' }],
   },
 
-  // FOOTER COMPACT
+  // FOOTER - Plus transparent
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -312,19 +333,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingVertical: 10, // Réduit de 16 à 10
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingVertical: 12,
     paddingHorizontal: 20,
     zIndex: 100,
   },
   footerHint: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
     flex: 1,
     fontWeight: '500',
   },
   
-  // BOUTON CAPTURE PROÉMINENT
+  // BOUTON FLASH
+  flashBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 25,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  flashBtnActive: {
+    backgroundColor: 'rgba(251, 191, 36, 0.3)',
+    borderColor: '#FCD34D',
+  },
+  flashIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  flashText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  flashTextActive: {
+    color: '#FCD34D',
+  },
+
+  // BOUTON CAPTURE
   captureBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,7 +407,7 @@ const styles = StyleSheet.create({
   },
   captureBtnText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
   },
 

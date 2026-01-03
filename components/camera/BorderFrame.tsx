@@ -1,23 +1,18 @@
 /**
  * BorderFrame - Guide d'alignement avec repères d'angle
  * 
- * Forme ⊓ ouverte avec arcs de cercle dans les coins pour aider au cadrage.
- * Les arcs ont un remplissage rayé semi-transparent (60%).
+ * Forme ⊓ ouverte avec rayures diagonales dans les coins
+ * pour aider à aligner les angles du compteur.
  */
 
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 
 interface BorderFrameProps {
-  /** Couleur de la ligne */
   color?: string;
-  /** Épaisseur de la ligne */
   thickness?: number;
-  /** Marge depuis les bords de l'écran */
   margin?: number;
-  /** Hauteur des lignes latérales (en % de la hauteur disponible) */
   sideHeightPercent?: number;
-  /** Décalage vertical depuis le haut */
   topOffset?: number;
 }
 
@@ -29,51 +24,59 @@ export function BorderFrame({
   topOffset = 60,
 }: BorderFrameProps) {
   
-  const cornerSize = 50; // Taille des arcs de coin
+  // Taille de la zone de coin avec rayures
+  const cornerSize = 30;
   
   return (
     <View style={styles.container} pointerEvents="none">
       
-      {/* ═══════════ COIN HAUT-GAUCHE ═══════════ */}
-      <View style={[styles.cornerContainer, { top: topOffset, left: margin }]}>
-        {/* Arc de cercle */}
-        <View style={[styles.cornerArc, styles.cornerTopLeft, { borderColor: color }]}>
-          {/* Rayures diagonales */}
-          <View style={styles.stripesContainer}>
-            {[...Array(8)].map((_, i) => (
-              <View 
-                key={i} 
-                style={[
-                  styles.stripe, 
-                  { 
-                    left: i * 8 - 20,
-                    backgroundColor: color,
-                  }
-                ]} 
-              />
-            ))}
-          </View>
-        </View>
+      {/* ═══════════ RAYURES COIN HAUT-GAUCHE ═══════════ */}
+      <View style={[
+        styles.cornerZone,
+        {
+          top: topOffset + thickness,
+          left: margin + thickness,
+          width: cornerSize,
+          height: cornerSize,
+        }
+      ]}>
+        {[...Array(7)].map((_, i) => (
+          <View 
+            key={i} 
+            style={[
+              styles.stripe, 
+              { 
+                left: i * 7 - 12,
+                backgroundColor: color,
+              }
+            ]} 
+          />
+        ))}
       </View>
       
-      {/* ═══════════ COIN HAUT-DROIT ═══════════ */}
-      <View style={[styles.cornerContainer, { top: topOffset, right: margin }]}>
-        <View style={[styles.cornerArc, styles.cornerTopRight, { borderColor: color }]}>
-          <View style={styles.stripesContainer}>
-            {[...Array(8)].map((_, i) => (
-              <View 
-                key={i} 
-                style={[
-                  styles.stripe, 
-                  { 
-                    left: i * 8 - 20,
-                    backgroundColor: color,
-                  }
-                ]} 
-              />
-            ))}
-          </View>
-        </View>
+      {/* ═══════════ RAYURES COIN HAUT-DROIT ═══════════ */}
+      <View style={[
+        styles.cornerZone,
+        {
+          top: topOffset + thickness,
+          right: margin + thickness,
+          width: cornerSize,
+          height: cornerSize,
+          transform: [{ scaleX: -1 }],
+        }
+      ]}>
+        {[...Array(7)].map((_, i) => (
+          <View 
+            key={i} 
+            style={[
+              styles.stripe,
+              { 
+                left: i * 7 - 12,
+                backgroundColor: color,
+              }
+            ]} 
+          />
+        ))}
       </View>
       
       {/* ═══════════ LIGNES PRINCIPALES ═══════════ */}
@@ -85,8 +88,8 @@ export function BorderFrame({
           { 
             backgroundColor: color,
             height: thickness,
-            left: margin + cornerSize,
-            right: margin + cornerSize,
+            left: margin,
+            right: margin,
             top: topOffset,
           }
         ]} 
@@ -100,8 +103,8 @@ export function BorderFrame({
             backgroundColor: color,
             width: thickness,
             left: margin,
-            top: topOffset + cornerSize,
-            height: `${sideHeightPercent - 15}%`,
+            top: topOffset,
+            height: `${sideHeightPercent}%`,
           }
         ]} 
       />
@@ -114,8 +117,8 @@ export function BorderFrame({
             backgroundColor: color,
             width: thickness,
             right: margin,
-            top: topOffset + cornerSize,
-            height: `${sideHeightPercent - 15}%`,
+            top: topOffset,
+            height: `${sideHeightPercent}%`,
           }
         ]} 
       />
@@ -132,53 +135,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   
-  // Conteneur de coin
-  cornerContainer: {
+  // Zone du coin avec rayures - Plus transparent
+  cornerZone: {
     position: 'absolute',
-    width: 50,
-    height: 50,
     overflow: 'hidden',
+    opacity: 0.3,
   },
   
-  // Arc de cercle de base
-  cornerArc: {
-    width: 50,
-    height: 50,
-    borderWidth: 4,
-    overflow: 'hidden',
-  },
-  
-  // Coin haut-gauche
-  cornerTopLeft: {
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 20,
-  },
-  
-  // Coin haut-droit
-  cornerTopRight: {
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 20,
-  },
-  
-  // Container des rayures
-  stripesContainer: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.4, // 60% transparent = 40% visible
-    overflow: 'hidden',
-  },
-  
-  // Rayure individuelle
+  // Rayure diagonale
   stripe: {
     position: 'absolute',
-    width: 3,
-    height: 100,
+    width: 2,
+    height: 60,
     transform: [{ rotate: '45deg' }],
-    top: -20,
+    top: -15,
   },
 });
