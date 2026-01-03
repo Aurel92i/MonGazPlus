@@ -139,24 +139,18 @@ export const DefaultConfig = {
   debugMode: __DEV__,
 };
 
-// Messages VEA
+// Messages VEA - Système binaire (OK ou FUITE)
 export const VEAMessages = {
   OK: {
     title: 'VEA OK',
     subtitle: 'Installation étanche',
-    recommendation: 'Procéder à la remise en service',
+    recommendation: 'Procéder à la remise en service. Ouvrir les robinets des appareils et rallumer les brûleurs.',
     icon: 'check-circle',
   },
-  DOUTE: {
-    title: 'DOUTE',
-    subtitle: 'Micro-oscillation détectée',
-    recommendation: 'Prolonger le test ou effectuer une nouvelle VEA',
-    icon: 'alert-circle',
-  },
-  FUITE_PROBABLE: {
-    title: 'FUITE PROBABLE',
-    subtitle: 'Mouvement significatif détecté',
-    recommendation: 'COUPER LE GAZ - Rechercher la fuite',
+  FUITE: {
+    title: 'FUITE DÉTECTÉE',
+    subtitle: 'Mouvement du compteur détecté',
+    recommendation: 'COUPER LE GAZ immédiatement - Fermer le robinet du compteur - Aérer - Rechercher la fuite - Appeler un professionnel',
     icon: 'x-circle',
   },
 };

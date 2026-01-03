@@ -26,6 +26,18 @@ export default function ParticulierVEAScreen() {
           </Text>
         </View>
 
+        {/* Rappel important - CORRIGÉ */}
+        <View style={styles.reminderCard}>
+          <Text style={styles.reminderIcon}>💡</Text>
+          <View style={styles.reminderContent}>
+            <Text style={styles.reminderTitle}>Avant de commencer</Text>
+            <Text style={styles.reminderText}>
+              <Text style={styles.reminderBold}>Robinets du compteur :</Text> LAISSEZ-LES OUVERTS{'\n'}
+              <Text style={styles.reminderBold}>Brûleurs (gazinière, chaudière) :</Text> ÉTEIGNEZ-LES
+            </Text>
+          </View>
+        </View>
+
         {/* Étapes simplifiées */}
         <View style={styles.stepsCard}>
           <Text style={styles.stepsTitle}>📋 Comment ça marche ?</Text>
@@ -35,9 +47,9 @@ export default function ParticulierVEAScreen() {
               <Text style={styles.stepNumberText}>1</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Fermez le gaz</Text>
+              <Text style={styles.stepTitle}>Éteignez vos appareils</Text>
               <Text style={styles.stepText}>
-                Fermez le robinet d'arrêt de votre compteur
+                Éteignez gazinière, chaudière et chauffe-eau. Gardez le robinet du compteur ouvert.
               </Text>
             </View>
           </View>
@@ -49,7 +61,7 @@ export default function ParticulierVEAScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Prenez une photo</Text>
               <Text style={styles.stepText}>
-                Photographiez les chiffres de votre compteur
+                Photographiez les chiffres de votre compteur. L'index sera relevé automatiquement.
               </Text>
             </View>
           </View>
@@ -73,7 +85,7 @@ export default function ParticulierVEAScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Reprenez une photo</Text>
               <Text style={styles.stepText}>
-                Photographiez à nouveau votre compteur
+                Photographiez à nouveau votre compteur au même endroit
               </Text>
             </View>
           </View>
@@ -85,9 +97,20 @@ export default function ParticulierVEAScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Résultat instantané</Text>
               <Text style={styles.stepText}>
-                L'application analyse et vous donne le verdict
+                L'application compare les index et vous donne le verdict
               </Text>
             </View>
+          </View>
+        </View>
+
+        {/* Info OCR */}
+        <View style={styles.ocrInfoCard}>
+          <Text style={styles.ocrInfoIcon}>📊</Text>
+          <View style={styles.ocrInfoContent}>
+            <Text style={styles.ocrInfoTitle}>Relevé d'index automatique</Text>
+            <Text style={styles.ocrInfoText}>
+              L'application lit automatiquement les chiffres de votre compteur pour comparer les index avant/après.
+            </Text>
           </View>
         </View>
 
@@ -142,7 +165,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.particulier,
   },
@@ -161,6 +184,37 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  reminderCard: {
+    backgroundColor: Colors.veaOkLight,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.veaOk,
+  },
+  reminderIcon: {
+    fontSize: 28,
+    marginRight: Spacing.md,
+  },
+  reminderContent: {
+    flex: 1,
+  },
+  reminderTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+    color: Colors.veaOk,
+    marginBottom: 4,
+  },
+  reminderText: {
+    fontSize: FontSizes.sm,
+    color: Colors.text,
+    lineHeight: 22,
+  },
+  reminderBold: {
+    fontWeight: '600',
   },
   stepsCard: {
     backgroundColor: Colors.surface,
@@ -208,6 +262,35 @@ const styles = StyleSheet.create({
   stepText: {
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
+    lineHeight: 20,
+  },
+  ocrInfoCard: {
+    backgroundColor: Colors.primaryLight,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  ocrInfoIcon: {
+    fontSize: 28,
+    marginRight: Spacing.md,
+  },
+  ocrInfoContent: {
+    flex: 1,
+  },
+  ocrInfoTitle: {
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginBottom: 2,
+  },
+  ocrInfoText: {
+    fontSize: FontSizes.sm,
+    color: Colors.text,
+    lineHeight: 20,
   },
   warningCard: {
     backgroundColor: Colors.veaDouteLight,

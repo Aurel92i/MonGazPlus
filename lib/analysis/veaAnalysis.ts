@@ -166,6 +166,7 @@ async function analyzeImages(
 
 /**
  * Génère la décision VEA basée sur l'analyse
+ * Système binaire : OK ou FUITE (pas de zone grise)
  */
 function generateDecision(
   comparison: ComparisonResult,
@@ -182,39 +183,29 @@ function generateDecision(
   if (decimalZoneDelta < THRESHOLDS.NO_MOVEMENT) {
     // Très peu de différence = haute confiance pour OK
     resultConfidence = 0.95;
-  } else if (decimalZoneDelta > THRESHOLDS.SIGNIFICANT_MOVEMENT) {
-    // Beaucoup de différence = haute confiance pour FUITE
-    resultConfidence = 0.9;
   } else {
-    // Zone grise = confiance moyenne
-    resultConfidence = 0.7;
+    // Mouvement détecté = confiance pour FUITE
+    resultConfidence = 0.85;
   }
   
   // Confiance finale
   const confidence = Math.min(resultConfidence, 0.7 + (timeConfidenceFactor * 0.25));
   
-  // Déterminer le résultat
+  // Déterminer le résultat - SYSTÈME BINAIRE
   let result: VEAResult;
-  let colorCode: 'green' | 'orange' | 'red';
+  let colorCode: 'green' | 'red';
   let recommendation: string;
   
-  switch (movementType) {
-    case 'none':
-      result = 'OK';
-      colorCode = 'green';
-      recommendation = 'Installation étanche. Vous pouvez procéder à la remise en service du gaz.';
-      break;
-    case 'micro':
-      result = 'DOUTE';
-      colorCode = 'orange';
-      recommendation = 'Micro-mouvement détecté. Recommandation : prolonger le test ou effectuer une nouvelle VEA.';
-      break;
-    case 'significant':
-    default:
-      result = 'FUITE_PROBABLE';
-      colorCode = 'red';
-      recommendation = 'ATTENTION : Mouvement significatif détecté. Ne pas remettre le gaz en service. Contacter un professionnel.';
-      break;
+  // Tout mouvement détecté = FUITE (pas de zone grise "doute")
+  if (movementType === 'none') {
+    result = 'OK';
+    colorCode = 'green';
+    recommendation = 'Installation étanche. Vous pouvez procéder à la remise en service : ouvrir les robinets des appareils et rallumer les brûleurs.';
+  } else {
+    // 'micro' ou 'significant' = FUITE
+    result = 'FUITE';
+    colorCode = 'red';
+    recommendation = 'FUITE DÉTECTÉE ! Fermer immédiatement le robinet du compteur. Aérer les locaux. Ne pas actionner d\'interrupteur. Contacter un professionnel ou appeler le 0 800 47 33 33.';
   }
   
   // Si le temps est très court, ajuster les recommandations
@@ -245,26 +236,21 @@ function generateDecision(
 }
 
 /**
- * Génère une description de l'analyse
+ * Génère une description de l'analyse - Système binaire
  */
 function getAnalysisDescription(
   movementType: 'none' | 'micro' | 'significant',
   delta: number
 ): string {
-  switch (movementType) {
-    case 'none':
-      return `Aucun mouvement détecté. Variation mesurée : ${delta.toFixed(1)}% (seuil : ${THRESHOLDS.NO_MOVEMENT}%).`;
-    case 'micro':
-      return `Micro-oscillation détectée. Variation mesurée : ${delta.toFixed(1)}%. Cela peut indiquer une très légère fuite ou une variation normale.`;
-    case 'significant':
-      return `Mouvement significatif détecté. Variation mesurée : ${delta.toFixed(1)}%. Cela indique probablement une fuite.`;
-    default:
-      return 'Analyse effectuée.';
+  if (movementType === 'none') {
+    return `Aucun mouvement détecté. Variation mesurée : ${delta.toFixed(1)}% (seuil : ${THRESHOLDS.NO_MOVEMENT}%). Installation étanche.`;
+  } else {
+    return `Mouvement détecté ! Variation mesurée : ${delta.toFixed(1)}%. Le compteur a tourné, indiquant une fuite de gaz.`;
   }
 }
 
 /**
- * Génère l'interprétation du résultat
+ * Génère l'interprétation du résultat - Système binaire
  */
 function getInterpretation(
   movementType: 'none' | 'micro' | 'significant',
@@ -275,15 +261,10 @@ function getInterpretation(
     ? `${Math.floor(elapsedTime / 60)}min ${elapsedTime % 60}s`
     : `${elapsedTime}s`;
     
-  switch (movementType) {
-    case 'none':
-      return `Après ${timeStr} d'observation, les chiffres du compteur n'ont pas bougé. L'installation est étanche.`;
-    case 'micro':
-      return `Après ${timeStr} d'observation, un léger mouvement (${delta.toFixed(1)}%) a été détecté. Cela peut être dû à une micro-fuite ou à un léger décalage de cadrage.`;
-    case 'significant':
-      return `Après ${timeStr} d'observation, un mouvement important (${delta.toFixed(1)}%) a été détecté, indiquant une probable fuite de gaz.`;
-    default:
-      return `Analyse effectuée après ${timeStr} d'observation.`;
+  if (movementType === 'none') {
+    return `Après ${timeStr} d'observation, les chiffres du compteur n'ont pas bougé. L'installation est étanche.`;
+  } else {
+    return `Après ${timeStr} d'observation, un mouvement (${delta.toFixed(1)}%) a été détecté sur le compteur, indiquant une fuite de gaz.`;
   }
 }
 
@@ -320,23 +301,21 @@ export async function performVEAAnalysis(
 
 /**
  * Version simplifiée pour test sans images réelles
- * Simule une analyse avec un résultat aléatoire pondéré
+ * Simule une analyse avec un résultat pondéré - Système binaire
  */
 export function performMockVEAAnalysis(elapsedTime: number): VEADecision {
-  // Simulation : 70% OK, 20% DOUTE, 10% FUITE
+  // Simulation : 85% OK, 15% FUITE
   const random = Math.random();
   let movementType: 'none' | 'micro' | 'significant';
   let delta: number;
   
-  if (random < 0.7) {
+  if (random < 0.85) {
     movementType = 'none';
     delta = Math.random() * THRESHOLDS.NO_MOVEMENT;
-  } else if (random < 0.9) {
-    movementType = 'micro';
-    delta = THRESHOLDS.NO_MOVEMENT + Math.random() * (THRESHOLDS.MICRO_OSCILLATION - THRESHOLDS.NO_MOVEMENT);
   } else {
+    // Toute fuite est significative maintenant
     movementType = 'significant';
-    delta = THRESHOLDS.MICRO_OSCILLATION + Math.random() * 10;
+    delta = THRESHOLDS.NO_MOVEMENT + Math.random() * 10;
   }
   
   const comparison: ComparisonResult = {

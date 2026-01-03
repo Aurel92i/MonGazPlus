@@ -17,16 +17,20 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import Slider from '@react-native-community/slider';
 import { useCamera } from '@/hooks';
 import { BorderFrame } from '@/components/camera';
+import { TutorialModal } from '@/components/TutorialModal';
 import { useVEAStore } from '@/stores/veaStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 
 export default function PhotoAvantScreen() {
   const router = useRouter();
   const veaStore = useVEAStore();
   const { frameSettings } = veaStore;
+  const preferencesStore = usePreferencesStore();
   const camera = useCamera();
   
   const [zoom, setZoom] = useState(0);
   const [displayZoom, setDisplayZoom] = useState(1);
+  const [showTutorial, setShowTutorial] = useState(preferencesStore.showTutorialPhoto1);
 
   // Flash depuis le store (persisté entre les photos)
   const flashEnabled = frameSettings.flashEnabled;
@@ -87,6 +91,14 @@ export default function PhotoAvantScreen() {
     router.back();
   };
 
+  const handleCloseTutorial = () => {
+    setShowTutorial(false);
+  };
+
+  const handleDontShowTutorialAgain = () => {
+    preferencesStore.setShowTutorialPhoto1(false);
+  };
+
   // ═══════════════════════════════════════════════════════════
   // ÉCRAN PERMISSION
   // ═══════════════════════════════════════════════════════════
@@ -119,6 +131,14 @@ export default function PhotoAvantScreen() {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
+      
+      {/* TUTORIEL */}
+      <TutorialModal
+        visible={showTutorial}
+        type="photo1"
+        onClose={handleCloseTutorial}
+        onDontShowAgain={handleDontShowTutorialAgain}
+      />
       
       {/* CAMÉRA */}
       <View style={styles.cameraContainer}>

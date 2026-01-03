@@ -1,15 +1,15 @@
 /**
- * Écran de capture Deuxième Photo
+ * Écran de capture Photo APRÈS
  * 
  * Interface épurée avec :
  * - Header compact avec chronomètre XXL
  * - Zoom info rehaussé à gauche
- * - Contrôles fantôme rehaussés à droite (+ en haut, - en bas)
- * - Cadre ⊓ avec rayures de coin
- * - Bouton flash + capture proéminent
+ * - Contrôles fantôme rehaussés à droite
+ * - Cadre ⊓ avec arcs de coin
+ * - Footer compact avec bouton proéminent
  */
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, Vibration } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -42,9 +42,6 @@ export default function PhotoApresScreen() {
   const [stabilityDuration, setStabilityDuration] = useState(0);
   const [isCapturing, setIsCapturing] = useState(false);
   const [ghostOpacity, setGhostOpacity] = useState(0.4);
-
-  // Flash depuis le store (conservé depuis la première photo)
-  const flashEnabled = frameSettings.flashEnabled;
 
   // Refs
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -151,10 +148,6 @@ export default function PhotoApresScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const toggleFlash = useCallback(() => {
-    veaStore.setFlash(!flashEnabled);
-  }, [flashEnabled]);
-
   const handleReadyToCapture = () => {
     if (elapsedTime < 30) {
       Alert.alert(
@@ -250,7 +243,6 @@ export default function PhotoApresScreen() {
             facing={camera.cameraType}
             onCameraReady={camera.onCameraReady}
             zoom={zoomValue}
-            enableTorch={flashEnabled}
           />
         )}
 
@@ -271,7 +263,7 @@ export default function PhotoApresScreen() {
         />
       </View>
 
-      {/* HEADER - Plus transparent */}
+      {/* HEADER COMPACT */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleClose} style={styles.closeBtn} disabled={isCapturing}>
           <Text style={styles.closeBtnText}>✕</Text>
@@ -285,7 +277,7 @@ export default function PhotoApresScreen() {
         </View>
         
         <View style={styles.titleContainer}>
-          <Text style={styles.titleText}>Deuxième photo</Text>
+          <Text style={styles.titleText}>PHOTO APRÈS</Text>
           <Text style={styles.stepText}>Étape 2/2</Text>
         </View>
       </View>
@@ -296,24 +288,21 @@ export default function PhotoApresScreen() {
         <Text style={styles.zoomText}>{frameSettings.zoom.toFixed(1)}x</Text>
       </View>
 
-      {/* CONTRÔLES FANTÔME - REHAUSSÉS (+ en haut, - en bas) */}
+      {/* CONTRÔLES FANTÔME - REHAUSSÉS */}
       {!isCapturing && (
         <View style={styles.ghostControls}>
           <Text style={styles.ghostIcon}>👻</Text>
-          
           <TouchableOpacity style={styles.ghostBtn} onPress={() => adjustOpacity(0.1)}>
             <Text style={styles.ghostBtnText}>+</Text>
           </TouchableOpacity>
-          
           <Text style={styles.ghostValue}>{Math.round(ghostOpacity * 100)}%</Text>
-          
           <TouchableOpacity style={styles.ghostBtn} onPress={() => adjustOpacity(-0.1)}>
             <Text style={styles.ghostBtnText}>−</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* FOOTER - Plus transparent */}
+      {/* FOOTER COMPACT */}
       <View style={styles.footer}>
         
         {/* Barre de progression (si pas encore 3min) */}
@@ -329,20 +318,6 @@ export default function PhotoApresScreen() {
         {/* Message temps atteint */}
         {isTimeRecommended && !readyToCapture && !isCapturing && (
           <Text style={styles.readyText}>✓ Temps recommandé atteint</Text>
-        )}
-
-        {/* Bouton Flash (visible sauf en mode capture) */}
-        {!readyToCapture && !isCapturing && (
-          <TouchableOpacity
-            style={[styles.flashBtn, flashEnabled && styles.flashBtnActive]}
-            onPress={toggleFlash}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.flashIcon}>{flashEnabled ? '⚡' : '🔦'}</Text>
-            <Text style={[styles.flashText, flashEnabled && styles.flashTextActive]}>
-              {flashEnabled ? 'ON' : 'OFF'}
-            </Text>
-          </TouchableOpacity>
         )}
 
         {/* BOUTON PRINCIPAL */}
@@ -436,7 +411,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // HEADER - Plus transparent
+  // HEADER COMPACT
   header: {
     position: 'absolute',
     top: 0,
@@ -447,24 +422,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     zIndex: 100,
   },
   closeBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeBtnText: {
     color: '#FFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
   },
   timerContainer: {
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     paddingHorizontal: 20,
     paddingVertical: 4,
     borderRadius: 10,
@@ -472,12 +447,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   timerContainerReady: {
-    backgroundColor: 'rgba(34, 197, 94, 0.25)',
+    backgroundColor: 'rgba(34, 197, 94, 0.3)',
     borderColor: '#4ADE80',
   },
   timerText: {
     color: '#FFF',
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
     letterSpacing: 2,
@@ -490,12 +465,12 @@ const styles = StyleSheet.create({
   },
   titleText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
   stepText: {
     color: '#F97316',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
   },
 
@@ -556,14 +531,14 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
 
-  // FOOTER - Plus transparent
+  // FOOTER COMPACT
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: 10,
     paddingHorizontal: 20,
     zIndex: 100,
     flexDirection: 'row',
@@ -586,47 +561,18 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   progressText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
     marginTop: 4,
   },
   readyText: {
     color: '#4ADE80',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     flex: 1,
   },
 
-  // BOUTON FLASH
-  flashBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 25,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  flashBtnActive: {
-    backgroundColor: 'rgba(251, 191, 36, 0.3)',
-    borderColor: '#FCD34D',
-  },
-  flashIcon: {
-    fontSize: 18,
-    marginRight: 6,
-  },
-  flashText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  flashTextActive: {
-    color: '#FCD34D',
-  },
-
-  // BOUTON PRINCIPAL
+  // BOUTON PRINCIPAL PROÉMINENT
   mainButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -642,12 +588,12 @@ const styles = StyleSheet.create({
     borderColor: '#4ADE80',
   },
   mainButtonIcon: {
-    fontSize: 24,
+    fontSize: 22,
     marginRight: 8,
   },
   mainButtonText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
 
@@ -672,7 +618,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   alignmentText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
     marginTop: 4,
   },
@@ -683,13 +629,13 @@ const styles = StyleSheet.create({
   },
   captureBtn: {
     backgroundColor: '#22C55E',
-    paddingVertical: 12,
-    paddingHorizontal: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 20,
   },
   captureBtnText: {
     color: '#FFF',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
   },
   cancelBtn: {
@@ -697,8 +643,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   cancelBtnText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
   },
 
   // OVERLAY CAPTURE

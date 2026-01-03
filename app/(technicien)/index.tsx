@@ -1,16 +1,50 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState, useEffect } from 'react';
 import { Colors, Spacing, FontSizes, BorderRadius, Shadows } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
-import { Technicien, isTechnicien } from '@/types';
+import { useHistoriqueStore } from '@/stores/historiqueStore';
+import { obtenirPosition, formaterAdresse } from '@/lib/geolocation';
+import { isTechnicien } from '@/types';
 
 export default function TechnicienHomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { getStatistiques } = useHistoriqueStore();
+  const [localisation, setLocalisation] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
-  // Type guard pour accéder aux propriétés technicien
   const technicien = user && isTechnicien(user) ? user : null;
+  const stats = getStatistiques();
+
+  // Obtenir la localisation au démarrage
+  useEffect(() => {
+    geolocalisationAutomatique();
+  }, []);
+
+  const geolocalisationAutomatique = async () => {
+    setIsLocating(true);
+    const result = await obtenirPosition();
+    if (result.success && result.data) {
+      setLocalisation(formaterAdresse(result.data));
+    }
+    setIsLocating(false);
+  };
+
+  const handleNouvelleVEA = () => {
+    // Aller directement à la capture photo
+    router.push('/capture/photo-avant');
+  };
+
+  const handleRapports = () => {
+    router.push('/(technicien)/rapports');
+  };
+
+  // Calcul du taux de réussite
+  const tauxReussite = stats.total > 0 
+    ? Math.round((stats.ok / stats.total) * 100) 
+    : 100;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -41,10 +75,26 @@ export default function TechnicienHomeScreen() {
           )}
         </View>
 
+        {/* Localisation actuelle */}
+        <TouchableOpacity 
+          style={styles.locationCard}
+          onPress={geolocalisationAutomatique}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.locationIcon}>📍</Text>
+          <View style={styles.locationContent}>
+            <Text style={styles.locationLabel}>Position actuelle</Text>
+            <Text style={styles.locationValue}>
+              {isLocating ? 'Localisation...' : (localisation || 'Appuyez pour localiser')}
+            </Text>
+          </View>
+          <Text style={styles.locationRefresh}>↻</Text>
+        </TouchableOpacity>
+
         {/* Bouton principal VEA */}
         <TouchableOpacity
           style={styles.mainButton}
-          onPress={() => router.push('/(technicien)/vea')}
+          onPress={handleNouvelleVEA}
           activeOpacity={0.8}
         >
           <View style={styles.mainButtonIcon}>
@@ -63,18 +113,37 @@ export default function TechnicienHomeScreen() {
         <Text style={styles.sectionTitle}>📊 Mes statistiques</Text>
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats.aujourdhui}</Text>
             <Text style={styles.statLabel}>Aujourd'hui</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats.semaine}</Text>
             <Text style={styles.statLabel}>Cette semaine</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={[styles.statValue, { color: Colors.veaOk }]}>
-              {technicien?.totalInterventions || 0}
+              {stats.total}
             </Text>
             <Text style={styles.statLabel}>Total</Text>
+          </View>
+        </View>
+
+        {/* Résumé des résultats */}
+        <View style={styles.resultsRow}>
+          <View style={[styles.resultCard, styles.resultOk]}>
+            <Text style={styles.resultIcon}>✓</Text>
+            <Text style={styles.resultValue}>{stats.ok}</Text>
+            <Text style={styles.resultLabel}>OK</Text>
+          </View>
+          <View style={[styles.resultCard, styles.resultFuite]}>
+            <Text style={styles.resultIcon}>✕</Text>
+            <Text style={styles.resultValue}>{stats.fuites}</Text>
+            <Text style={styles.resultLabel}>Fuites</Text>
+          </View>
+          <View style={[styles.resultCard, styles.resultTaux]}>
+            <Text style={styles.resultIcon}>%</Text>
+            <Text style={styles.resultValue}>{tauxReussite}</Text>
+            <Text style={styles.resultLabel}>Taux OK</Text>
           </View>
         </View>
 
@@ -87,7 +156,7 @@ export default function TechnicienHomeScreen() {
           >
             <Text style={styles.quickActionIcon}>📋</Text>
             <Text style={styles.quickActionTitle}>Historique</Text>
-            <Text style={styles.quickActionSubtitle}>Interventions</Text>
+            <Text style={styles.quickActionSubtitle}>{stats.total} interventions</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -99,23 +168,15 @@ export default function TechnicienHomeScreen() {
             <Text style={styles.quickActionSubtitle}>Procédures</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity 
+            style={styles.quickActionCard}
+            onPress={handleRapports}
+          >
             <Text style={styles.quickActionIcon}>📄</Text>
             <Text style={styles.quickActionTitle}>Rapports</Text>
             <Text style={styles.quickActionSubtitle}>Export PDF</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Zone d'intervention */}
-        {technicien?.zone && (
-          <View style={styles.zoneCard}>
-            <Text style={styles.zoneIcon}>📍</Text>
-            <View>
-              <Text style={styles.zoneLabel}>Zone d'intervention</Text>
-              <Text style={styles.zoneValue}>{technicien.zone}</Text>
-            </View>
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -134,7 +195,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.technicienLight,
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     borderWidth: 2,
     borderColor: Colors.technicien,
   },
@@ -192,6 +253,35 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     fontWeight: '600',
   },
+  locationCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    ...Shadows.sm,
+  },
+  locationIcon: {
+    fontSize: 24,
+    marginRight: Spacing.md,
+  },
+  locationContent: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+  },
+  locationValue: {
+    fontSize: FontSizes.sm,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  locationRefresh: {
+    fontSize: 20,
+    color: Colors.technicien,
+  },
   mainButton: {
     backgroundColor: Colors.technicien,
     borderRadius: BorderRadius.xl,
@@ -239,7 +329,7 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.md,
   },
   statCard: {
     flex: 1,
@@ -258,6 +348,39 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     color: Colors.textMuted,
     marginTop: 2,
+  },
+  resultsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  resultCard: {
+    flex: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    alignItems: 'center',
+  },
+  resultOk: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+  },
+  resultFuite: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  resultTaux: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+  },
+  resultIcon: {
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  resultValue: {
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  resultLabel: {
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
   },
   quickActions: {
     flexDirection: 'row',
@@ -285,26 +408,5 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     color: Colors.textMuted,
     marginTop: 2,
-  },
-  zoneCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...Shadows.sm,
-  },
-  zoneIcon: {
-    fontSize: 24,
-    marginRight: Spacing.md,
-  },
-  zoneLabel: {
-    fontSize: FontSizes.sm,
-    color: Colors.textMuted,
-  },
-  zoneValue: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    color: Colors.text,
   },
 });

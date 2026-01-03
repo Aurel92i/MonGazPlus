@@ -80,7 +80,8 @@ export interface MeterReading {
 // RÉSULTAT VEA
 // ============================================
 
-export type VEAResult = 'OK' | 'DOUTE' | 'FUITE_PROBABLE';
+// Système binaire : OK ou FUITE (plus de doute)
+export type VEAResult = 'OK' | 'FUITE';
 
 export interface VEAAnalysisDetails {
   /** Changement de chiffre détecté */
@@ -108,8 +109,8 @@ export interface VEADecision {
   details: VEAAnalysisDetails;
   /** Recommandation pour le technicien */
   recommendation: string;
-  /** Code couleur pour l'UI */
-  colorCode: 'green' | 'orange' | 'red';
+  /** Code couleur pour l'UI - binaire */
+  colorCode: 'green' | 'red';
 }
 
 // ============================================

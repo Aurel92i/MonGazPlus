@@ -14,11 +14,12 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/authStore';
+import { LogoSimple } from '@/components/Logo';
 import { Colors, Spacing, FontSizes, BorderRadius, Shadows } from '@/constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, loginWithGoogle, resetPassword, isLoading, error, clearError } = useAuthStore();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,8 +39,36 @@ export default function LoginScreen() {
     const success = await login({ email: email.trim(), password });
 
     if (success) {
-      // La redirection se fait automatiquement via l'index
       router.replace('/');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    clearError();
+    // Pour simplifier, on connecte en tant que particulier par défaut
+    // En production, on pourrait demander le type de compte
+    const success = await loginWithGoogle('particulier');
+    
+    if (success) {
+      router.replace('/');
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert(
+        'Email requis',
+        'Veuillez d\'abord saisir votre email pour recevoir le lien de réinitialisation.'
+      );
+      return;
+    }
+
+    const success = await resetPassword(email.trim());
+    if (success) {
+      Alert.alert(
+        'Email envoyé',
+        'Si un compte existe avec cet email, vous recevrez un lien de réinitialisation.'
+      );
     }
   };
 
@@ -66,13 +95,32 @@ export default function LoginScreen() {
         >
           {/* Logo et titre */}
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Text style={styles.logoIcon}>🔥</Text>
-            </View>
-            <Text style={styles.appName}>MonGaz+</Text>
+            <LogoSimple size={80} showText={false} />
+            <Text style={styles.appName}>
+              Mon<Text style={styles.appNameAccent}>Gaz</Text>
+              <Text style={styles.appNamePlus}>+</Text>
+            </Text>
             <Text style={styles.tagline}>
               Vérification d'Étanchéité Apparente
             </Text>
+          </View>
+
+          {/* Google Login */}
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleLogin}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.googleIcon}>G</Text>
+            <Text style={styles.googleButtonText}>Continuer avec Google</Text>
+          </TouchableOpacity>
+
+          {/* Séparateur */}
+          <View style={styles.separator}>
+            <View style={styles.separatorLine} />
+            <Text style={styles.separatorText}>ou</Text>
+            <View style={styles.separatorLine} />
           </View>
 
           {/* Formulaire */}
@@ -142,10 +190,18 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             {/* Mot de passe oublié */}
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
               <Text style={styles.forgotPasswordText}>
                 Mot de passe oublié ?
               </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Lien inscription */}
+          <View style={styles.signupLink}>
+            <Text style={styles.signupLinkText}>Pas encore de compte ? </Text>
+            <TouchableOpacity onPress={() => router.push('/signup')}>
+              <Text style={styles.signupLinkButton}>Créer un compte</Text>
             </TouchableOpacity>
           </View>
 
@@ -203,29 +259,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xl,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-    ...Shadows.lg,
-  },
-  logoIcon: {
-    fontSize: 40,
-  },
   appName: {
-    fontSize: FontSizes.xxxl,
+    fontSize: 32,
+    fontWeight: '300',
+    color: Colors.text,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  appNameAccent: {
     fontWeight: '700',
     color: Colors.primary,
-    marginBottom: Spacing.xs,
+  },
+  appNamePlus: {
+    fontWeight: '800',
+    color: '#F97316',
+    fontSize: 36,
   },
   tagline: {
     fontSize: FontSizes.md,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  googleIcon: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: FontSizes.md,
+    fontWeight: '500',
+    color: Colors.text,
+  },
+  separator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.md,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  separatorText: {
+    paddingHorizontal: Spacing.md,
+    color: Colors.textMuted,
+    fontSize: FontSizes.sm,
   },
   form: {
     backgroundColor: Colors.surface,
@@ -313,6 +403,20 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: Colors.primary,
     fontSize: FontSizes.sm,
+  },
+  signupLink: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+  },
+  signupLinkText: {
+    fontSize: FontSizes.md,
+    color: Colors.textSecondary,
+  },
+  signupLinkButton: {
+    fontSize: FontSizes.md,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   demoSection: {
     backgroundColor: Colors.surface,

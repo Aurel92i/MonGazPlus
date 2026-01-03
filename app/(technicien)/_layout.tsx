@@ -58,17 +58,6 @@ export default function TechnicienLayout() {
         }}
       />
       <Tabs.Screen
-        name="vea"
-        options={{
-          title: 'VEA',
-          tabBarLabel: 'VEA',
-          headerTitle: 'Vérification Étanchéité',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>🔍</Text>
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="historique"
         options={{
           title: 'Historique',
@@ -76,6 +65,17 @@ export default function TechnicienLayout() {
           headerTitle: 'Mes interventions',
           tabBarIcon: ({ focused }) => (
             <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>📋</Text>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="rapports"
+        options={{
+          title: 'Rapports',
+          tabBarLabel: 'Rapports',
+          headerTitle: 'Export & Rapports',
+          tabBarIcon: ({ focused }) => (
+            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>📄</Text>
           ),
         }}
       />

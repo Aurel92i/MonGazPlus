@@ -79,6 +79,24 @@ export default function ParticulierHomeScreen() {
           </View>
         </View>
 
+        {/* Relevé d'index */}
+        <TouchableOpacity
+          style={styles.releveButton}
+          onPress={() => router.push('/(particulier)/releve-index')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.releveButtonIcon}>
+            <Text style={styles.releveButtonIconText}>📊</Text>
+          </View>
+          <View style={styles.releveButtonContent}>
+            <Text style={styles.releveButtonTitle}>Relevé d'index</Text>
+            <Text style={styles.releveButtonSubtitle}>
+              Photographiez votre compteur pour obtenir l'index
+            </Text>
+          </View>
+          <Text style={styles.releveButtonArrow}>→</Text>
+        </TouchableOpacity>
+
         {/* Actions rapides */}
         <Text style={styles.sectionTitle}>⚡ Accès rapide</Text>
         <View style={styles.quickActions}>
@@ -187,6 +205,46 @@ const styles = StyleSheet.create({
   mainButtonArrow: {
     fontSize: FontSizes.xxl,
     color: Colors.textOnPrimary,
+  },
+  releveButton: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    ...Shadows.sm,
+  },
+  releveButtonIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  releveButtonIconText: {
+    fontSize: 28,
+  },
+  releveButtonContent: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  releveButtonTitle: {
+    fontSize: FontSizes.lg,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  releveButtonSubtitle: {
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  releveButtonArrow: {
+    fontSize: FontSizes.xxl,
+    color: '#3B82F6',
   },
   meterCard: {
     backgroundColor: Colors.surface,

@@ -149,21 +149,14 @@ export default function ResultatScreen() {
           icon: '✅',
           ...VEAMessages.OK,
         };
-      case 'DOUTE':
-        return {
-          backgroundColor: Colors.veaDouteLight,
-          borderColor: Colors.veaDoute,
-          textColor: Colors.veaDoute,
-          icon: '⚠️',
-          ...VEAMessages.DOUTE,
-        };
-      case 'FUITE_PROBABLE':
+      case 'FUITE':
+      default:
         return {
           backgroundColor: Colors.veaFuiteLight,
           borderColor: Colors.veaFuite,
           textColor: Colors.veaFuite,
           icon: '🚨',
-          ...VEAMessages.FUITE_PROBABLE,
+          ...VEAMessages.FUITE,
         };
     }
   };
@@ -185,11 +178,8 @@ export default function ResultatScreen() {
 
   const handleNewVEA = () => {
     veaStore.resetSession();
-    if (isTechnicien) {
-      router.replace('/(technicien)/vea');
-    } else {
-      router.replace('/(particulier)/vea');
-    }
+    // Aller directement à la capture pour les deux rôles
+    router.replace('/capture/photo-avant');
   };
 
   const openPhotoModal = (mode: PhotoViewMode) => {
@@ -295,7 +285,7 @@ export default function ResultatScreen() {
             <Text style={styles.detailLabel}>Variation détectée</Text>
             <Text style={[
               styles.detailValue,
-              { color: decision.result === 'OK' ? Colors.veaOk : decision.result === 'DOUTE' ? Colors.veaDoute : Colors.veaFuite }
+              { color: decision.result === 'OK' ? Colors.veaOk : Colors.veaFuite }
             ]}>
               {decision.details.digitDelta.toFixed(1)}%
             </Text>
@@ -384,10 +374,8 @@ export default function ResultatScreen() {
           <View style={styles.interpretationContainer}>
             <Text style={styles.interpretationText}>
               {decision.result === 'OK' 
-                ? "Les photos montrent que les chiffres du compteur n'ont pas bougé pendant le test."
-                : decision.result === 'DOUTE'
-                  ? "Une légère variation a été détectée. Vérifiez qu'aucun appareil gaz n'était en fonctionnement."
-                  : "Un mouvement significatif des chiffres a été détecté, indiquant une possible consommation de gaz."
+                ? "Les photos montrent que les chiffres du compteur n'ont pas bougé pendant le test. Votre installation est étanche."
+                : "Un mouvement des chiffres a été détecté, indiquant une fuite de gaz. Ne remettez pas le gaz en service."
               }
             </Text>
           </View>
@@ -408,7 +396,7 @@ export default function ResultatScreen() {
         )}
 
         {/* Numéro d'urgence si fuite */}
-        {decision.result === 'FUITE_PROBABLE' && (
+        {decision.result === 'FUITE' && (
           <TouchableOpacity style={styles.emergencyCard}>
             <Text style={styles.emergencyIcon}>📞</Text>
             <View style={styles.emergencyContent}>
